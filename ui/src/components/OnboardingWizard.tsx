@@ -8,6 +8,7 @@ import { companiesApi } from "../api/companies";
 import { goalsApi } from "../api/goals";
 import { agentsApi } from "../api/agents";
 import { issuesApi } from "../api/issues";
+import { projectsApi } from "../api/projects";
 import { queryKeys } from "../lib/queryKeys";
 import { Dialog, DialogPortal } from "@/components/ui/dialog";
 import {
@@ -16,6 +17,7 @@ import {
   PopoverTrigger
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "../lib/utils";
 import {
   extractModelName,
@@ -23,7 +25,21 @@ import {
 } from "../lib/model-utils";
 import { getUIAdapter } from "../adapters";
 import { defaultCreateValues } from "./agent-config-defaults";
-import { parseOnboardingGoalInput } from "../lib/onboarding-goal";
+import {
+  buildCompanyGoalDraft,
+  buildStarterProjectDescription,
+  buildStarterTaskDescription,
+  buildStarterTaskTitle,
+  deriveStarterProjectName,
+  hasStarterProjectInput,
+  type OnboardingProfileDraft,
+} from "../lib/onboarding-profile";
+import {
+  buildArchetypeBacklogIssues,
+  COMPANY_ARCHETYPES,
+  getCompanyArchetype,
+  type CompanyArchetypeId,
+} from "../lib/company-archetypes";
 import {
   DEFAULT_CODEX_LOCAL_BYPASS_APPROVALS_AND_SANDBOX,
   DEFAULT_CODEX_LOCAL_MODEL
@@ -50,6 +66,7 @@ import {
   Loader2,
   FolderOpen,
   ChevronDown,
+  Workflow,
   X
 } from "lucide-react";
 
@@ -65,17 +82,49 @@ type AdapterType =
   | "http"
   | "openclaw_gateway";
 
-const DEFAULT_TASK_DESCRIPTION = `Setup yourself as the CEO. Use the ceo persona found here: 
+function formatBudgetUsdInput(cents: number) {
+  if (!Number.isFinite(cents) || cents <= 0) return "";
+  const usd = cents / 100;
+  return Number.isInteger(usd) ? String(usd) : usd.toFixed(2).replace(/\.?0+$/, "");
+}
 
-https://github.com/paperclipai/companies/blob/main/default/ceo/AGENTS.md
+function parseBudgetUsdToCents(value: string) {
+  const normalized = value.trim().replace(/[$,\s]/g, "");
+  if (!normalized) return null;
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return Number.NaN;
+  return Math.round(Number(normalized) * 100);
+}
 
-Ensure you have a folder agents/ceo and then download this AGENTS.md, and sibling HEARTBEAT.md, SOUL.md, and TOOLS.md. and set that AGENTS.md as the path to your agents instruction file
+function isValidHttpUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
-After that, hire yourself a Founding Engineer agent and then plan the roadmap and tasks for your new company.`;
+function ArchetypeIcon({ id }: { id: CompanyArchetypeId }) {
+  if (id === "saas_studio") {
+    return <Rocket className="h-4 w-4" />;
+  }
+  if (id === "agency_ops") {
+    return <Workflow className="h-4 w-4" />;
+  }
+  if (id === "commerce_engine") {
+    return <Building2 className="h-4 w-4" />;
+  }
+  if (id === "media_engine") {
+    return <ListTodo className="h-4 w-4" />;
+  }
+  return <Sparkles className="h-4 w-4" />;
+}
 
 export function OnboardingWizard() {
   const { onboardingOpen, onboardingOptions, closeOnboarding } = useDialog();
-  const { selectedCompanyId, companies, setSelectedCompanyId } = useCompany();
+  const { companies, setSelectedCompanyId } = useCompany();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -90,7 +139,17 @@ export function OnboardingWizard() {
 
   // Step 1
   const [companyName, setCompanyName] = useState("");
+  const [selectedArchetypeId, setSelectedArchetypeId] =
+    useState<CompanyArchetypeId>("custom");
+  const [companyDescription, setCompanyDescription] = useState("");
+  const [companyWebsite, setCompanyWebsite] = useState("");
+  const [targetCustomer, setTargetCustomer] = useState("");
   const [companyGoal, setCompanyGoal] = useState("");
+  const [initialFocus, setInitialFocus] = useState("");
+  const [budgetUsd, setBudgetUsd] = useState("");
+  const [starterProjectName, setStarterProjectName] = useState("");
+  const [starterRepoUrl, setStarterRepoUrl] = useState("");
+  const [starterRepoRef, setStarterRepoRef] = useState("");
 
   // Step 2
   const [agentName, setAgentName] = useState("CEO");
@@ -110,10 +169,10 @@ export function OnboardingWizard() {
   const [showMoreAdapters, setShowMoreAdapters] = useState(false);
 
   // Step 3
-  const [taskTitle, setTaskTitle] = useState("Create your CEO HEARTBEAT.md");
-  const [taskDescription, setTaskDescription] = useState(
-    DEFAULT_TASK_DESCRIPTION
-  );
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskDescription, setTaskDescription] = useState("");
+  const [taskTitleDirty, setTaskTitleDirty] = useState(false);
+  const [taskDescriptionDirty, setTaskDescriptionDirty] = useState(false);
 
   // Auto-grow textarea for task description
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -132,7 +191,52 @@ export function OnboardingWizard() {
     string | null
   >(null);
   const [createdAgentId, setCreatedAgentId] = useState<string | null>(null);
+  const [createdGoalId, setCreatedGoalId] = useState<string | null>(null);
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
   const [createdIssueRef, setCreatedIssueRef] = useState<string | null>(null);
+
+  const selectedCompany = useMemo(
+    () =>
+      (createdCompanyId
+        ? companies.find((company) => company.id === createdCompanyId)
+        : null) ?? null,
+    [companies, createdCompanyId]
+  );
+
+  const companyProfile = useMemo<OnboardingProfileDraft>(
+    () => ({
+      companyName,
+      companyDescription,
+      companyWebsite,
+      targetCustomer,
+      companyGoal,
+      initialFocus,
+      starterProjectName,
+      starterRepoUrl,
+      starterRepoRef
+    }),
+    [
+      companyName,
+      companyDescription,
+      companyWebsite,
+      targetCustomer,
+      companyGoal,
+      initialFocus,
+      starterProjectName,
+      starterRepoUrl,
+      starterRepoRef
+    ]
+  );
+  const selectedArchetype = useMemo(
+    () => getCompanyArchetype(selectedArchetypeId),
+    [selectedArchetypeId]
+  );
+  const archetypeBacklogIssues = useMemo(
+    () => buildArchetypeBacklogIssues(selectedArchetypeId, companyProfile),
+    [selectedArchetypeId, companyProfile]
+  );
+  const summaryCompanyName = companyName.trim() || selectedCompany?.name || "Company";
+  const summaryProjectName = deriveStarterProjectName(companyProfile);
 
   // Sync step and company when onboarding opens with options.
   // Keep this independent from company-list refreshes so Step 1 completion
@@ -156,10 +260,29 @@ export function OnboardingWizard() {
     if (company) setCreatedCompanyPrefix(company.issuePrefix);
   }, [onboardingOpen, createdCompanyId, createdCompanyPrefix, companies]);
 
+  useEffect(() => {
+    if (!onboardingOpen || !existingCompanyId) return;
+    const company = companies.find((entry) => entry.id === existingCompanyId);
+    if (!company) return;
+    setCompanyName(company.name);
+    setCompanyDescription(company.description ?? "");
+    setBudgetUsd(formatBudgetUsdInput(company.budgetMonthlyCents));
+  }, [onboardingOpen, existingCompanyId, companies]);
+
   // Resize textarea when step 3 is shown or description changes
   useEffect(() => {
     if (step === 3) autoResizeTextarea();
   }, [step, taskDescription, autoResizeTextarea]);
+
+  useEffect(() => {
+    if (taskTitleDirty) return;
+    setTaskTitle(buildStarterTaskTitle(companyProfile));
+  }, [companyProfile, taskTitleDirty]);
+
+  useEffect(() => {
+    if (taskDescriptionDirty) return;
+    setTaskDescription(buildStarterTaskDescription(companyProfile));
+  }, [companyProfile, taskDescriptionDirty]);
 
   const {
     data: adapterModels,
@@ -248,7 +371,16 @@ export function OnboardingWizard() {
     setLoading(false);
     setError(null);
     setCompanyName("");
+    setSelectedArchetypeId("custom");
+    setCompanyDescription("");
+    setCompanyWebsite("");
+    setTargetCustomer("");
     setCompanyGoal("");
+    setInitialFocus("");
+    setBudgetUsd("");
+    setStarterProjectName("");
+    setStarterRepoUrl("");
+    setStarterRepoRef("");
     setAgentName("CEO");
     setAdapterType("claude_local");
     setCwd("");
@@ -261,12 +393,31 @@ export function OnboardingWizard() {
     setAdapterEnvLoading(false);
     setForceUnsetAnthropicApiKey(false);
     setUnsetAnthropicLoading(false);
-    setTaskTitle("Create your CEO HEARTBEAT.md");
-    setTaskDescription(DEFAULT_TASK_DESCRIPTION);
+    setTaskTitle("");
+    setTaskDescription("");
+    setTaskTitleDirty(false);
+    setTaskDescriptionDirty(false);
     setCreatedCompanyId(null);
     setCreatedCompanyPrefix(null);
     setCreatedAgentId(null);
+    setCreatedGoalId(null);
+    setCreatedProjectId(null);
     setCreatedIssueRef(null);
+  }
+
+  function handleArchetypeSelect(archetypeId: CompanyArchetypeId) {
+    setSelectedArchetypeId(archetypeId);
+    const archetype = getCompanyArchetype(archetypeId);
+    if (!archetype || archetype.id === "custom") return;
+
+    setCompanyDescription(archetype.defaults.companyDescription ?? "");
+    setTargetCustomer(archetype.defaults.targetCustomer ?? "");
+    setCompanyGoal(archetype.defaults.companyGoal ?? "");
+    setInitialFocus(archetype.defaults.initialFocus ?? "");
+    setStarterProjectName(archetype.defaults.starterProjectName ?? "");
+    setBudgetUsd(archetype.defaults.budgetUsd ?? "");
+    setTaskTitleDirty(false);
+    setTaskDescriptionDirty(false);
   }
 
   function handleClose() {
@@ -342,29 +493,36 @@ export function OnboardingWizard() {
   }
 
   async function handleStep1Next() {
+    const budgetMonthlyCents = parseBudgetUsdToCents(budgetUsd);
+    if (Number.isNaN(budgetMonthlyCents)) {
+      setError("Monthly budget must be a valid USD amount, for example 750 or 750.50.");
+      return;
+    }
+    if (!isValidHttpUrl(starterRepoUrl)) {
+      setError("Starter repo URL must be a valid absolute http(s) URL.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const company = await companiesApi.create({ name: companyName.trim() });
+      const companyPayload = {
+        name: companyName.trim(),
+        description: companyDescription.trim() || null,
+        ...(budgetMonthlyCents === null
+          ? {}
+          : { budgetMonthlyCents })
+      };
+      const company = createdCompanyId
+        ? await companiesApi.update(createdCompanyId, companyPayload)
+        : await companiesApi.create(companyPayload);
       setCreatedCompanyId(company.id);
       setCreatedCompanyPrefix(company.issuePrefix);
+      setCreatedGoalId(null);
+      setCreatedProjectId(null);
+      setCreatedIssueRef(null);
       setSelectedCompanyId(company.id);
       queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
-
-      if (companyGoal.trim()) {
-        const parsedGoal = parseOnboardingGoalInput(companyGoal);
-        await goalsApi.create(company.id, {
-          title: parsedGoal.title,
-          ...(parsedGoal.description
-            ? { description: parsedGoal.description }
-            : {}),
-          level: "company",
-          status: "active"
-        });
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.goals.list(company.id)
-        });
-      }
 
       setStep(2);
     } catch (err) {
@@ -504,6 +662,58 @@ export function OnboardingWizard() {
     setLoading(true);
     setError(null);
     try {
+      const shouldCreateCompanyGoal =
+        !existingCompanyId ||
+        Boolean(
+          companyGoal.trim() ||
+            initialFocus.trim() ||
+            targetCustomer.trim() ||
+            companyWebsite.trim()
+        );
+      let goalId = createdGoalId;
+      if (!goalId && shouldCreateCompanyGoal) {
+        const goalDraft = buildCompanyGoalDraft(companyProfile);
+        const goal = await goalsApi.create(createdCompanyId, {
+          title: goalDraft.title,
+          ...(goalDraft.description
+            ? { description: goalDraft.description }
+            : {}),
+          level: "company",
+          status: "active"
+        });
+        goalId = goal.id;
+        setCreatedGoalId(goal.id);
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.goals.list(createdCompanyId)
+        });
+      }
+
+      let projectId = createdProjectId;
+      const starterProjectNameValue = deriveStarterProjectName(companyProfile);
+      if (!projectId && hasStarterProjectInput(companyProfile) && starterProjectNameValue) {
+        const project = await projectsApi.create(createdCompanyId, {
+          name: starterProjectNameValue,
+          description: buildStarterProjectDescription(companyProfile),
+          status: "planned",
+          ...(goalId ? { goalId } : {}),
+          ...(starterRepoUrl.trim()
+            ? {
+                workspace: {
+                  name: starterProjectNameValue,
+                  repoUrl: starterRepoUrl.trim(),
+                  repoRef: starterRepoRef.trim() || null,
+                  isPrimary: true
+                }
+              }
+            : {})
+        });
+        projectId = project.id;
+        setCreatedProjectId(project.id);
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.projects.list(createdCompanyId)
+        });
+      }
+
       let issueRef = createdIssueRef;
       if (!issueRef) {
         const issue = await issuesApi.create(createdCompanyId, {
@@ -511,6 +721,8 @@ export function OnboardingWizard() {
           ...(taskDescription.trim()
             ? { description: taskDescription.trim() }
             : {}),
+          ...(goalId ? { goalId } : {}),
+          ...(projectId ? { projectId } : {}),
           assigneeAgentId: createdAgentId,
           status: "todo"
         });
@@ -519,6 +731,22 @@ export function OnboardingWizard() {
         queryClient.invalidateQueries({
           queryKey: queryKeys.issues.list(createdCompanyId)
         });
+
+        if (archetypeBacklogIssues.length > 0) {
+          await Promise.all(
+            archetypeBacklogIssues.map((template) =>
+              issuesApi.create(createdCompanyId, {
+                title: template.title,
+                ...(template.description
+                  ? { description: template.description }
+                  : {}),
+                ...(goalId ? { goalId } : {}),
+                ...(projectId ? { projectId } : {}),
+                status: "backlog"
+              })
+            )
+          );
+        }
       }
 
       setSelectedCompanyId(createdCompanyId);
@@ -613,48 +841,197 @@ export function OnboardingWizard() {
                       <Building2 className="h-5 w-5 text-muted-foreground" />
                     </div>
                     <div>
-                      <h3 className="font-medium">Name your company</h3>
+                      <h3 className="font-medium">Create the company brief</h3>
                       <p className="text-xs text-muted-foreground">
-                        This is the organization your agents will work for.
+                        Give your agents enough business context to operate like a real company from day one.
                       </p>
                     </div>
                   </div>
-                  <div className="mt-3 group">
-                    <label
-                      className={cn(
-                        "text-xs mb-1 block transition-colors",
-                        companyName.trim()
-                          ? "text-foreground"
-                          : "text-muted-foreground group-focus-within:text-foreground"
+                  <div className="space-y-4 rounded-md border border-border/80 bg-muted/10 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                          Archetype
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Pick a starting company shape. We will preload the brief, starter project, and backlog around it.
+                        </p>
+                      </div>
+                      {selectedArchetype.id !== "custom" && (
+                        <div className="rounded-full border border-green-500/20 bg-green-500/10 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-green-700">
+                          Template active
+                        </div>
                       )}
-                    >
-                      Company name
-                    </label>
-                    <input
-                      className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
-                      placeholder="Acme Corp"
-                      value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
-                      autoFocus
-                    />
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {COMPANY_ARCHETYPES.map((archetype) => {
+                        const selected = archetype.id === selectedArchetypeId;
+                        return (
+                          <button
+                            key={archetype.id}
+                            type="button"
+                            onClick={() => handleArchetypeSelect(archetype.id)}
+                            className={cn(
+                              "rounded-md border p-4 text-left transition-colors",
+                              selected
+                                ? "border-foreground bg-background"
+                                : "border-border hover:bg-background/70"
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-muted/60 text-foreground">
+                                <ArchetypeIcon id={archetype.id} />
+                              </div>
+                              {selected && (
+                                <div className="rounded-full bg-foreground px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-background">
+                                  Selected
+                                </div>
+                              )}
+                            </div>
+                            <p className="mt-3 text-sm font-medium">{archetype.name}</p>
+                            <p className="mt-1 text-xs font-medium text-foreground/75">
+                              {archetype.strapline}
+                            </p>
+                            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                              {archetype.description}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="group">
-                    <label
-                      className={cn(
-                        "text-xs mb-1 block transition-colors",
-                        companyGoal.trim()
-                          ? "text-foreground"
-                          : "text-muted-foreground group-focus-within:text-foreground"
-                      )}
-                    >
-                      Mission / goal (optional)
-                    </label>
-                    <textarea
-                      className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50 resize-none min-h-[60px]"
-                      placeholder="What is this company trying to achieve?"
-                      value={companyGoal}
-                      onChange={(e) => setCompanyGoal(e.target.value)}
-                    />
+                  <div className="space-y-4 rounded-md border border-border/80 bg-muted/10 p-4">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                      Company
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-muted-foreground block">
+                        Company name
+                      </label>
+                      <input
+                        className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+                        placeholder="Acme Robotics"
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-muted-foreground block">
+                        What does the company do?
+                      </label>
+                      <Textarea
+                        rows={4}
+                        placeholder="We build AI operations software for small e-commerce teams."
+                        value={companyDescription}
+                        onChange={(e) => setCompanyDescription(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-muted-foreground block">
+                          Website (optional)
+                        </label>
+                        <input
+                          className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+                          placeholder="https://acme.com"
+                          value={companyWebsite}
+                          onChange={(e) => setCompanyWebsite(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-muted-foreground block">
+                          Monthly budget in USD (optional)
+                        </label>
+                        <input
+                          className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+                          inputMode="decimal"
+                          placeholder="1500"
+                          value={budgetUsd}
+                          onChange={(e) => setBudgetUsd(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 rounded-md border border-border/80 bg-muted/10 p-4">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                      Operating brief
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-muted-foreground block">
+                        Target customer or team
+                      </label>
+                      <input
+                        className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+                        placeholder="Founder-led SaaS teams with 5-30 employees"
+                        value={targetCustomer}
+                        onChange={(e) => setTargetCustomer(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-muted-foreground block">
+                        Mission or outcome
+                      </label>
+                      <Textarea
+                        rows={4}
+                        placeholder="Reach 100 paying customers by building the fastest AI operations layer for e-commerce support."
+                        value={companyGoal}
+                        onChange={(e) => setCompanyGoal(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-muted-foreground block">
+                        Initial operating focus
+                      </label>
+                      <Textarea
+                        rows={4}
+                        placeholder="Set up the first product roadmap, establish the engineering loop, and launch the first customer-facing workflow."
+                        value={initialFocus}
+                        onChange={(e) => setInitialFocus(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 rounded-md border border-border/80 bg-muted/10 p-4">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                      Starter project
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-muted-foreground block">
+                        Project name (optional)
+                      </label>
+                      <input
+                        className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+                        placeholder="Launch customer support copilot"
+                        value={starterProjectName}
+                        onChange={(e) => setStarterProjectName(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-muted-foreground block">
+                          Repo URL (optional)
+                        </label>
+                        <input
+                          className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+                          placeholder="https://github.com/acme/product"
+                          value={starterRepoUrl}
+                          onChange={(e) => setStarterRepoUrl(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-muted-foreground block">
+                          Repo ref (optional)
+                        </label>
+                        <input
+                          className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+                          placeholder="main"
+                          value={starterRepoRef}
+                          onChange={(e) => setStarterRepoRef(e.target.value)}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1151,7 +1528,10 @@ export function OnboardingWizard() {
                       className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
                       placeholder="e.g. Research competitor pricing"
                       value={taskTitle}
-                      onChange={(e) => setTaskTitle(e.target.value)}
+                      onChange={(e) => {
+                        setTaskTitleDirty(true);
+                        setTaskTitle(e.target.value);
+                      }}
                       autoFocus
                     />
                   </div>
@@ -1159,12 +1539,15 @@ export function OnboardingWizard() {
                     <label className="text-xs text-muted-foreground mb-1 block">
                       Description (optional)
                     </label>
-                    <textarea
+                    <Textarea
                       ref={textareaRef}
-                      className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50 resize-none min-h-[120px] max-h-[300px] overflow-y-auto"
+                      className="resize-none min-h-[120px] max-h-[300px] overflow-y-auto"
                       placeholder="Add more detail about what the agent should do..."
                       value={taskDescription}
-                      onChange={(e) => setTaskDescription(e.target.value)}
+                      onChange={(e) => {
+                        setTaskDescriptionDirty(true);
+                        setTaskDescription(e.target.value);
+                      }}
                     />
                   </div>
                 </div>
@@ -1186,15 +1569,72 @@ export function OnboardingWizard() {
                   </div>
                   <div className="border border-border divide-y divide-border">
                     <div className="flex items-center gap-3 px-3 py-2.5">
-                      <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <Sparkles className="h-4 w-4 text-muted-foreground shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">
-                          {companyName}
+                          {selectedArchetype.name}
                         </p>
-                        <p className="text-xs text-muted-foreground">Company</p>
+                        <p className="text-xs text-muted-foreground">
+                          Company archetype
+                        </p>
                       </div>
                       <Check className="h-4 w-4 text-green-500 shrink-0" />
                     </div>
+                    <div className="flex items-center gap-3 px-3 py-2.5">
+                      <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {summaryCompanyName}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {companyDescription.trim() || "Company"}
+                        </p>
+                      </div>
+                      <Check className="h-4 w-4 text-green-500 shrink-0" />
+                    </div>
+                    {companyGoal.trim() && (
+                      <div className="flex items-center gap-3 px-3 py-2.5">
+                        <Rocket className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {buildCompanyGoalDraft(companyProfile).title}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Company goal
+                          </p>
+                        </div>
+                        <Check className="h-4 w-4 text-green-500 shrink-0" />
+                      </div>
+                    )}
+                    {summaryProjectName && (
+                      <div className="flex items-center gap-3 px-3 py-2.5">
+                        <Workflow className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {summaryProjectName}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Starter project
+                          </p>
+                        </div>
+                        <Check className="h-4 w-4 text-green-500 shrink-0" />
+                      </div>
+                    )}
+                    {archetypeBacklogIssues.length > 0 && (
+                      <div className="flex items-center gap-3 px-3 py-2.5">
+                        <ListTodo className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {archetypeBacklogIssues.length} template backlog issue
+                            {archetypeBacklogIssues.length === 1 ? "" : "s"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Seeded from the {selectedArchetype.name} archetype
+                          </p>
+                        </div>
+                        <Check className="h-4 w-4 text-green-500 shrink-0" />
+                      </div>
+                    )}
                     <div className="flex items-center gap-3 px-3 py-2.5">
                       <Bot className="h-4 w-4 text-muted-foreground shrink-0" />
                       <div className="flex-1 min-w-0">

@@ -33,6 +33,7 @@ import { NewAgent } from "./pages/NewAgent";
 import { AuthPage } from "./pages/Auth";
 import { BoardClaimPage } from "./pages/BoardClaim";
 import { InviteLandingPage } from "./pages/InviteLanding";
+import { LandingPage } from "./pages/Landing";
 import { NotFoundPage } from "./pages/NotFound";
 import { queryKeys } from "./lib/queryKeys";
 import { useCompany } from "./context/CompanyContext";
@@ -99,6 +100,9 @@ function CloudAccessGate() {
   }
 
   if (isAuthenticatedMode && !sessionQuery.data) {
+    if (location.pathname === "/") {
+      return <LandingPage />;
+    }
     const next = encodeURIComponent(`${location.pathname}${location.search}`);
     return <Navigate to={`/auth?next=${next}`} replace />;
   }
