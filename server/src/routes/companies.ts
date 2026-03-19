@@ -109,7 +109,12 @@ export function companyRoutes(db: Db) {
   router.post("/", validate(createCompanySchema), async (req, res) => {
     assertBoard(req);
     if (!(req.actor.source === "local_implicit" || req.actor.isInstanceAdmin)) {
-      throw forbidden("Instance admin required");
+      const existingCompanies = await svc.list();
+      if (existingCompanies.length === 0 && req.actor.userId) {
+        await access.promoteInstanceAdmin(req.actor.userId);
+      } else {
+        throw forbidden("Instance admin required");
+      }
     }
     const company = await svc.create(req.body);
     await access.ensureMembership(company.id, "user", req.actor.userId ?? "local-board", "owner", "active");
