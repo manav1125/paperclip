@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AdapterEnvironmentTestResult } from "@paperclipai/shared";
 import { useDialog } from "../context/DialogContext";
+import { useProductGuide } from "../context/ProductGuideContext";
 import { useCompany } from "../context/CompanyContext";
 import { companiesApi } from "../api/companies";
 import { goalsApi } from "../api/goals";
@@ -125,6 +126,7 @@ function ArchetypeIcon({ id }: { id: CompanyArchetypeId }) {
 
 export function OnboardingWizard() {
   const { onboardingOpen, onboardingOptions, closeOnboarding } = useDialog();
+  const { queueWorkspaceGuide } = useProductGuide();
   const { companies, setSelectedCompanyId } = useCompany();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -322,6 +324,61 @@ export function OnboardingWizard() {
   const isHostedPublic =
     health?.deploymentMode === "authenticated" &&
     health?.deploymentExposure === "public";
+  const onboardingCoach = useMemo(() => {
+    const launchVerb = existingCompanyId ? "expand" : "launch";
+    if (step === 1) {
+      return {
+        eyebrow: "Why this matters",
+        title: "Shape the company before you automate it",
+        body:
+          "Strong setup starts with a real operating brief. Give the agents enough context to sound like your team instead of a generic assistant.",
+        tips: [
+          "Choose an archetype if you want sensible defaults fast.",
+          "Name the target customer and mission clearly so your starter goal is useful.",
+          "Keep the first project narrow. A single workstream is easier to validate than a whole org.",
+        ],
+      };
+    }
+    if (step === 2) {
+      return {
+        eyebrow: "Agent runtime",
+        title: "Pick a safe first operator",
+        body:
+          "Your first agent should be reliable, not fancy. Start with one CEO or operator role, validate how it behaves, then add more departments once the loop feels solid.",
+        tips: [
+          isHostedPublic
+            ? "On this hosted Render deployment, use /paperclip as the working directory."
+            : "Use a real absolute working directory where the runtime can store memory and files.",
+          "Keep the default model at first so you can learn behavior before optimizing.",
+          "Run the environment test before launching so the first heartbeat is uneventful.",
+        ],
+      };
+    }
+    if (step === 3) {
+      return {
+        eyebrow: "Starter work",
+        title: "Give the agent one sharp first assignment",
+        body:
+          "The first task sets the tone for the whole workspace. Make it specific, outcome-based, and attached to the starter project so the company launches with useful momentum.",
+        tips: [
+          "Describe the deliverable, not just the topic.",
+          "Keep the first assignment small enough to review quickly.",
+          "Use the task description to define what success looks like.",
+        ],
+      };
+    }
+    return {
+      eyebrow: "Launch plan",
+      title: `Confirm the company you are about to ${launchVerb}`,
+      body:
+        "Paperclip will create the company, seed the goal and starter backlog, create the first agent, and open the first issue so you can immediately start steering the system.",
+      tips: [
+        "Review the project and issue names so the workspace starts organized.",
+        "You can replay the guided product tour after launch with the Guide Me button.",
+        "The best first move after launch is usually to review the created issue and comment with sharper direction.",
+      ],
+    };
+  }, [existingCompanyId, isHostedPublic, step]);
 
   useEffect(() => {
     if (step !== 2) return;
@@ -764,6 +821,7 @@ export function OnboardingWizard() {
       }
 
       setSelectedCompanyId(createdCompanyId);
+      queueWorkspaceGuide(createdCompanyId);
       reset();
       closeOnboarding();
       navigate(
@@ -848,6 +906,31 @@ export function OnboardingWizard() {
               </div>
 
               {/* Step content */}
+              <div className="mb-5 rounded-2xl border border-border/80 bg-muted/20 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-foreground text-background">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                      {onboardingCoach.eyebrow}
+                    </div>
+                    <h4 className="mt-1 text-base font-semibold">{onboardingCoach.title}</h4>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {onboardingCoach.body}
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {onboardingCoach.tips.map((tip) => (
+                        <div key={tip} className="flex items-start gap-2 text-sm text-foreground/85">
+                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground" />
+                          <span>{tip}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {step === 1 && (
                 <div className="space-y-5">
                   <div className="flex items-center gap-3 mb-1">

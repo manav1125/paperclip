@@ -20,6 +20,7 @@ import { usePanel } from "../context/PanelContext";
 import { useCompany } from "../context/CompanyContext";
 import { useSidebar } from "../context/SidebarContext";
 import { useTheme } from "../context/ThemeContext";
+import { useProductGuide } from "../context/ProductGuideContext";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useCompanyPageMemory } from "../hooks/useCompanyPageMemory";
 import { healthApi } from "../api/health";
@@ -73,6 +74,7 @@ export function Layout() {
     setSelectedCompanyId,
   } = useCompany();
   const { theme, toggleTheme } = useTheme();
+  const { startWorkspaceGuide, isGuideOpen } = useProductGuide();
   const { companyPrefix } = useParams<{ companyPrefix: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -421,6 +423,23 @@ export function Layout() {
           </div>
         </div>
       </div>
+      {selectedCompanyId && !isGuideOpen && (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className={cn(
+            "fixed z-30 shadow-lg",
+            isMobile
+              ? "bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4"
+              : "bottom-5 right-5",
+          )}
+          onClick={startWorkspaceGuide}
+        >
+          <BookOpen className="mr-1.5 h-3.5 w-3.5" />
+          Guide Me
+        </Button>
+      )}
       {isMobile && <MobileBottomNav visible={mobileNavVisible} />}
       <CommandPalette />
       <NewIssueDialog />

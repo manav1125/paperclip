@@ -13,6 +13,7 @@ interface SidebarNavItemProps {
   badgeTone?: "default" | "danger";
   alert?: boolean;
   liveCount?: number;
+  guideId?: string;
 }
 
 export function SidebarNavItem({
@@ -25,6 +26,7 @@ export function SidebarNavItem({
   badgeTone = "default",
   alert = false,
   liveCount,
+  guideId,
 }: SidebarNavItemProps) {
   const { isMobile, setSidebarOpen } = useSidebar();
 
@@ -33,6 +35,7 @@ export function SidebarNavItem({
       to={to}
       end={end}
       onClick={() => { if (isMobile) setSidebarOpen(false); }}
+      data-guide-id={guideId}
       className={({ isActive }) =>
         cn(
           "flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium transition-colors",
