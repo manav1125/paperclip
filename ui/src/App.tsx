@@ -76,6 +76,8 @@ function CloudAccessGate() {
   });
 
   const isAuthenticatedMode = healthQuery.data?.deploymentMode === "authenticated";
+  const isPublicAuthenticatedMode =
+    isAuthenticatedMode && healthQuery.data?.deploymentExposure === "public";
   const sessionQuery = useQuery({
     queryKey: queryKeys.auth.session,
     queryFn: () => authApi.getSession(),
@@ -96,7 +98,16 @@ function CloudAccessGate() {
   }
 
   if (isAuthenticatedMode && healthQuery.data?.bootstrapStatus === "bootstrap_pending") {
-    return <BootstrapPendingPage hasActiveInvite={healthQuery.data.bootstrapInviteActive} />;
+    if (!isPublicAuthenticatedMode) {
+      return <BootstrapPendingPage hasActiveInvite={healthQuery.data.bootstrapInviteActive} />;
+    }
+    if (!sessionQuery.data) {
+      if (location.pathname === "/") {
+        return <LandingPage />;
+      }
+      const next = encodeURIComponent(`${location.pathname}${location.search}`);
+      return <Navigate to={`/auth?next=${next}`} replace />;
+    }
   }
 
   if (isAuthenticatedMode && !sessionQuery.data) {

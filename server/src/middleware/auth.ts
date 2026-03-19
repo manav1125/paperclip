@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Request, RequestHandler } from "express";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, count, eq, isNull } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { agentApiKeys, agents, companyMemberships, instanceUserRoles } from "@paperclipai/db";
 import { verifyLocalAgentJwt } from "../agent-auth-jwt.js";
@@ -40,23 +40,42 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
         }
         if (session?.user?.id) {
           const userId = session.user.id;
-          const [roleRow, memberships] = await Promise.all([
-            db
-              .select({ id: instanceUserRoles.id })
+          let roleRow = await db
+            .select({ id: instanceUserRoles.id })
+            .from(instanceUserRoles)
+            .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")))
+            .then((rows) => rows[0] ?? null);
+          if (!roleRow) {
+            const adminCount = await db
+              .select({ count: count() })
               .from(instanceUserRoles)
-              .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")))
-              .then((rows) => rows[0] ?? null),
-            db
-              .select({ companyId: companyMemberships.companyId })
-              .from(companyMemberships)
-              .where(
-                and(
-                  eq(companyMemberships.principalType, "user"),
-                  eq(companyMemberships.principalId, userId),
-                  eq(companyMemberships.status, "active"),
-                ),
+              .where(eq(instanceUserRoles.role, "instance_admin"))
+              .then((rows) => Number(rows[0]?.count ?? 0));
+            if (adminCount === 0) {
+              await db
+                .insert(instanceUserRoles)
+                .values({ userId, role: "instance_admin" })
+                .onConflictDoNothing();
+              roleRow = await db
+                .select({ id: instanceUserRoles.id })
+                .from(instanceUserRoles)
+                .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")))
+                .then((rows) => rows[0] ?? null);
+              if (roleRow) {
+                logger.info({ userId }, "Auto-promoted first authenticated user to instance admin");
+              }
+            }
+          }
+          const memberships = await db
+            .select({ companyId: companyMemberships.companyId })
+            .from(companyMemberships)
+            .where(
+              and(
+                eq(companyMemberships.principalType, "user"),
+                eq(companyMemberships.principalId, userId),
+                eq(companyMemberships.status, "active"),
               ),
-          ]);
+            );
           req.actor = {
             type: "board",
             userId,
