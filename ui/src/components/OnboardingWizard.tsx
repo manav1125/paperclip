@@ -9,6 +9,7 @@ import { goalsApi } from "../api/goals";
 import { agentsApi } from "../api/agents";
 import { issuesApi } from "../api/issues";
 import { projectsApi } from "../api/projects";
+import { healthApi } from "../api/health";
 import { queryKeys } from "../lib/queryKeys";
 import { Dialog, DialogPortal } from "@/components/ui/dialog";
 import {
@@ -313,12 +314,25 @@ export function OnboardingWizard() {
       : adapterType === "opencode_local"
       ? "opencode"
       : "claude");
+  const { data: health } = useQuery({
+    queryKey: queryKeys.health,
+    queryFn: () => healthApi.get(),
+    enabled: onboardingOpen,
+  });
+  const isHostedPublic =
+    health?.deploymentMode === "authenticated" &&
+    health?.deploymentExposure === "public";
 
   useEffect(() => {
     if (step !== 2) return;
     setAdapterEnvResult(null);
     setAdapterEnvError(null);
   }, [step, adapterType, cwd, model, command, args, url]);
+
+  useEffect(() => {
+    if (!onboardingOpen || step !== 2 || !isHostedPublic || cwd.trim()) return;
+    setCwd("/paperclip");
+  }, [onboardingOpen, step, isHostedPublic, cwd]);
 
   const selectedModel = (adapterModels ?? []).find((m) => m.id === model);
   const hasAnthropicApiKeyOverrideCheck =
@@ -1225,13 +1239,19 @@ export function OnboardingWizard() {
                           <label className="text-xs text-muted-foreground">
                             Working directory
                           </label>
-                          <HintIcon text="Paperclip works best if you create a new folder for your agents to keep their memories and stay organized. Create a new folder and put the path here." />
+                          <HintIcon
+                            text={
+                              isHostedPublic
+                                ? "This hosted Render deployment should use /paperclip for agent workspaces. Local desktop paths like /Users/... will not exist on the server."
+                                : "Paperclip works best if you create a new folder for your agents to keep their memories and stay organized. Create a new folder and put the path here."
+                            }
+                          />
                         </div>
                         <div className="flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5">
                           <FolderOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           <input
                             className="w-full bg-transparent outline-none text-sm font-mono placeholder:text-muted-foreground/50"
-                            placeholder="/path/to/project"
+                            placeholder={isHostedPublic ? "/paperclip" : "/path/to/project"}
                             value={cwd}
                             onChange={(e) => setCwd(e.target.value)}
                           />
