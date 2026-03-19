@@ -23,6 +23,7 @@ const accessServiceMocks = {
   canUser: vi.fn(),
   ensureMembership: vi.fn(),
   promoteInstanceAdmin: vi.fn(),
+  setPrincipalGrants: vi.fn(),
 };
 
 const logActivityMock = vi.fn();
@@ -80,6 +81,7 @@ describe("company bootstrap creation", () => {
       "owner",
       "active",
     );
+    expect(accessServiceMocks.setPrincipalGrants).toHaveBeenCalled();
   });
 
   it("still rejects non-admin creation when a company already exists", async () => {
@@ -112,6 +114,7 @@ describe("company bootstrap creation", () => {
       "owner",
       "active",
     );
+    expect(accessServiceMocks.setPrincipalGrants).toHaveBeenCalled();
     expect(accessServiceMocks.promoteInstanceAdmin).not.toHaveBeenCalled();
   });
 });
