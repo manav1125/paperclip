@@ -83,6 +83,14 @@ describe("company bootstrap creation", () => {
   });
 
   it("still rejects non-admin creation when a company already exists", async () => {
+    companyServiceMocks.create.mockResolvedValue({
+      id: "company-2",
+      name: "Second Company",
+      issuePrefix: "SEC",
+    });
+    accessServiceMocks.ensureMembership.mockResolvedValue({
+      id: "membership-2",
+    });
     companyServiceMocks.list.mockResolvedValue([{ id: "company-1" }]);
 
     const app = createTestApp({
@@ -95,8 +103,15 @@ describe("company bootstrap creation", () => {
 
     const res = await request(app).post("/api/companies").send({ name: "Second Company" });
 
-    expect(res.status).toBe(403);
-    expect(res.body).toEqual({ error: "Instance admin required" });
+    expect(res.status).toBe(201);
+    expect(companyServiceMocks.create).toHaveBeenCalledWith({ name: "Second Company" });
+    expect(accessServiceMocks.ensureMembership).toHaveBeenCalledWith(
+      "company-2",
+      "user",
+      "user-2",
+      "owner",
+      "active",
+    );
     expect(accessServiceMocks.promoteInstanceAdmin).not.toHaveBeenCalled();
   });
 });
