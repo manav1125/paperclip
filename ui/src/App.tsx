@@ -308,6 +308,7 @@ export function App() {
   return (
     <>
       <Routes>
+        <Route path="landing" element={<LandingPage />} />
         <Route path="auth" element={<AuthPage />} />
         <Route path="board-claim/:token" element={<BoardClaimPage />} />
         <Route path="invite/:token" element={<InviteLandingPage />} />
