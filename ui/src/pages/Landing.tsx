@@ -117,6 +117,27 @@ const steps = [
   },
 ];
 
+const companySamples = [
+  { name: "Atlas Ops", detail: "7 agents live", accent: "bg-teal-400" },
+  { name: "Northstar Studio", detail: "3 approvals waiting", accent: "bg-amber-400" },
+  { name: "Signal Commerce", detail: "1 launch in progress", accent: "bg-cyan-400" },
+];
+
+const comparisonRows = [
+  {
+    without: "AI work lives across random chats, docs, tabs, and ad hoc prompts.",
+    withPaperclip: "Every company gets one operating surface for goals, issues, agents, approvals, and review.",
+  },
+  {
+    without: "People keep re-explaining strategy because context is trapped in someone's head.",
+    withPaperclip: "Context flows from company brief to goal to project to issue so operators know what they are doing and why.",
+  },
+  {
+    without: "There is no governance layer, so nobody knows what ran, what changed, or what it cost.",
+    withPaperclip: "Approvals, budgets, and run history make AI work visible, auditable, and manageable.",
+  },
+];
+
 export function LandingPage() {
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -240,6 +261,19 @@ export function LandingPage() {
                       </div>
                     </div>
 
+                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                      {[
+                        { label: "Setup", value: "15 min" },
+                        { label: "Companies", value: "Multi-tenant" },
+                        { label: "Control", value: "Board approval" },
+                      ].map((stat) => (
+                        <div key={stat.label} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-stone-400">{stat.label}</p>
+                          <p className="mt-2 text-lg font-semibold text-white">{stat.value}</p>
+                        </div>
+                      ))}
+                    </div>
+
                     <div className="mt-5 space-y-3">
                       {steps.map((step) => (
                         <div key={step.title} className="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -250,6 +284,58 @@ export function LandingPage() {
                       ))}
                     </div>
 
+                    <div className="mt-5 grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-white">Goal alignment</p>
+                          <span className="rounded-full border border-teal-400/25 bg-teal-400/10 px-2 py-0.5 text-[11px] text-teal-200">
+                            Live chain
+                          </span>
+                        </div>
+                        <div className="mt-4 space-y-3">
+                          {[
+                            "Company mission: Reach $1M ARR with an AI-enabled service",
+                            "Project: Launch the revenue engine",
+                            "Agent: CEO",
+                            "Task: Build marketing plan and revenue playbook",
+                          ].map((item, index) => (
+                            <div key={item} className="flex items-center gap-3">
+                              <div className="flex flex-col items-center">
+                                <div className="h-2.5 w-2.5 rounded-full bg-teal-300 animate-pulse" />
+                                {index < 3 && <div className="mt-1 h-6 w-px bg-white/15" />}
+                              </div>
+                              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 text-stone-300">
+                                {item}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <p className="text-sm font-semibold text-white">Portfolio view</p>
+                        <div className="mt-4 space-y-3">
+                          {companySamples.map((company) => (
+                            <div
+                              key={company.name}
+                              className="rounded-xl border border-white/10 bg-black/20 p-3 shadow-[0_10px_30px_rgba(0,0,0,0.15)]"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`h-2.5 w-2.5 rounded-full ${company.accent}`} />
+                                <div>
+                                  <p className="text-sm font-medium text-white">{company.name}</p>
+                                  <p className="text-xs text-stone-400">{company.detail}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-4 rounded-xl border border-amber-300/15 bg-amber-300/8 p-3 text-xs leading-5 text-stone-300">
+                          One deployment can manage multiple companies with separate workspaces, goals, operators, and audit trails.
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="mt-5 rounded-2xl border border-amber-300/15 bg-amber-300/8 p-4">
                       <p className="text-sm font-semibold text-amber-100">Reality check</p>
                       <p className="mt-2 text-sm leading-6 text-stone-300">
@@ -257,6 +343,89 @@ export function LandingPage() {
                         still assumes local-style runtimes where needed, which is fine for this phase and clearly surfaced in-product.
                       </p>
                     </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="mt-24">
+              <div className="grid gap-5 lg:grid-cols-3">
+                <div className="rounded-[2rem] border border-stone-900/10 bg-white/75 p-6 shadow-sm backdrop-blur">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-stone-950">Mission to execution</p>
+                      <p className="mt-1 text-sm text-stone-500">A visual chain, not a disconnected prompt.</p>
+                    </div>
+                    <Target className="h-5 w-5 text-teal-700" />
+                  </div>
+                  <div className="mt-5 space-y-3">
+                    {[
+                      { label: "Mission", tone: "bg-stone-950 text-white", text: "Make onboarding a growth advantage" },
+                      { label: "Project", tone: "bg-teal-700 text-white", text: "Launch AI-assisted GTM system" },
+                      { label: "Owner", tone: "bg-white text-stone-900 border border-stone-200", text: "CEO operator" },
+                      { label: "Task", tone: "bg-white text-stone-900 border border-stone-200", text: "Create the first revenue sprint" },
+                    ].map((item, index) => (
+                      <div key={item.label} className="flex items-center gap-3">
+                        <div className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${item.tone}`}>
+                          {item.label}
+                        </div>
+                        <div className="text-sm text-stone-700">{item.text}</div>
+                        {index < 3 && <ArrowRight className="ml-auto h-4 w-4 text-stone-300" />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[2rem] border border-stone-900/10 bg-white/75 p-6 shadow-sm backdrop-blur">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-stone-950">Budget visibility</p>
+                      <p className="mt-1 text-sm text-stone-500">See who is burning tokens and where to tighten.</p>
+                    </div>
+                    <Workflow className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div className="mt-5 space-y-4">
+                    {[
+                      { agent: "CEO", used: "18 / 60", width: "w-[30%]" },
+                      { agent: "CMO", used: "25 / 40", width: "w-[62%]" },
+                      { agent: "Ops Lead", used: "9 / 35", width: "w-[26%]" },
+                    ].map((row) => (
+                      <div key={row.agent}>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium text-stone-800">{row.agent}</span>
+                          <span className="text-stone-500">${row.used}</span>
+                        </div>
+                        <div className="mt-2 h-2 rounded-full bg-stone-200">
+                          <div className={`h-2 rounded-full bg-[linear-gradient(90deg,#0f766e,#f59e0b)] ${row.width}`} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[2rem] border border-stone-900/10 bg-white/75 p-6 shadow-sm backdrop-blur">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-stone-950">Managed work queue</p>
+                      <p className="mt-1 text-sm text-stone-500">Tasks, review, and decisions stay in one loop.</p>
+                    </div>
+                    <Layers3 className="h-5 w-5 text-cyan-700" />
+                  </div>
+                  <div className="mt-5 space-y-3">
+                    {[
+                      { title: "Prepare launch messaging", state: "In review", tone: "text-amber-700 bg-amber-100" },
+                      { title: "Stand up CEO operator", state: "Done", tone: "text-teal-700 bg-teal-100" },
+                      { title: "Create sales collateral backlog", state: "Queued", tone: "text-cyan-700 bg-cyan-100" },
+                    ].map((item) => (
+                      <div key={item.title} className="rounded-xl border border-stone-200 bg-stone-50/80 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium text-stone-900">{item.title}</p>
+                          <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${item.tone}`}>
+                            {item.state}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -285,6 +454,30 @@ export function LandingPage() {
                     </div>
                     <h3 className="mt-5 text-xl font-semibold text-stone-950">{audience.title}</h3>
                     <p className="mt-3 text-sm leading-7 text-stone-700">{audience.copy}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="mt-24 rounded-[2rem] border border-stone-900/10 bg-white/75 p-8 shadow-sm backdrop-blur sm:p-10">
+              <div className="max-w-3xl">
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-stone-500">Why it lands</p>
+                <h2 className="mt-4 font-serif text-4xl leading-tight text-stone-950 sm:text-5xl">
+                  The difference is not just more AI. It is better operating design.
+                </h2>
+              </div>
+
+              <div className="mt-10 space-y-4">
+                {comparisonRows.map((row, index) => (
+                  <div key={index} className="grid gap-4 rounded-3xl border border-stone-900/10 bg-stone-50/70 p-5 lg:grid-cols-2">
+                    <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-600">Without Paperclip</p>
+                      <p className="mt-3 text-sm leading-7 text-stone-700">{row.without}</p>
+                    </div>
+                    <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">With Paperclip</p>
+                      <p className="mt-3 text-sm leading-7 text-stone-700">{row.withPaperclip}</p>
+                    </div>
                   </div>
                 ))}
               </div>
