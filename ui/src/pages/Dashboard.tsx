@@ -5,7 +5,6 @@ import { dashboardApi } from "../api/dashboard";
 import { activityApi } from "../api/activity";
 import { issuesApi } from "../api/issues";
 import { agentsApi } from "../api/agents";
-import { goalsApi } from "../api/goals";
 import { projectsApi } from "../api/projects";
 import { heartbeatsApi } from "../api/heartbeats";
 import { useCompany } from "../context/CompanyContext";
@@ -75,12 +74,6 @@ export function Dashboard() {
   const { data: projects } = useQuery({
     queryKey: queryKeys.projects.list(selectedCompanyId!),
     queryFn: () => projectsApi.list(selectedCompanyId!),
-    enabled: !!selectedCompanyId,
-  });
-
-  const { data: goals } = useQuery({
-    queryKey: queryKeys.goals.list(selectedCompanyId!),
-    queryFn: () => goalsApi.list(selectedCompanyId!),
     enabled: !!selectedCompanyId,
   });
 
@@ -217,11 +210,7 @@ export function Dashboard() {
       )}
 
       <OperatorPlaybookCard
-        hasGoal={(goals ?? []).some((goal) => goal.level === "company" && goal.status === "active")}
-        hasAgents={(agents?.length ?? 0) > 0}
-        hasProjectOrIssue={(projects?.length ?? 0) > 0 || (issues?.length ?? 0) > 0}
-        hasRunActivity={(runs?.length ?? 0) > 0}
-        hasOperatingHistory={(activity?.length ?? 0) > 0}
+        companyId={selectedCompanyId!}
         onCreateAgent={() => openOnboarding({ initialStep: 2, companyId: selectedCompanyId! })}
         onReplayGuide={startWorkspaceGuide}
       />
