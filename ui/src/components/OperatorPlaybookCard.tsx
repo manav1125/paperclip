@@ -52,6 +52,10 @@ function readCompletedSteps(companyId: string) {
 function writeCompletedSteps(companyId: string, stepIds: Set<string>) {
   if (typeof window === "undefined") return;
   try {
+    if (stepIds.size === 0) {
+      window.localStorage.removeItem(completionKey(companyId));
+      return;
+    }
     window.localStorage.setItem(completionKey(companyId), JSON.stringify(Array.from(stepIds)));
   } catch {
     // Ignore storage failures in restricted environments.
@@ -91,6 +95,12 @@ export function OperatorPlaybookCard({
     },
     [companyId],
   );
+
+  const resetProgress = useCallback(() => {
+    const cleared = new Set<string>();
+    writeCompletedSteps(companyId, cleared);
+    setCompletedSteps(cleared);
+  }, [companyId]);
 
   const steps: PlaybookStep[] = useMemo(() => [
     {
@@ -164,9 +174,14 @@ export function OperatorPlaybookCard({
               This is the practical sequence for managing the platform well. Move through these steps in order until the system feels stable, then replay the product tour anytime you need a refresher.
             </CardDescription>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={onReplayGuide}>
-            Replay guide
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={resetProgress}>
+              Reset checklist
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={onReplayGuide}>
+              Replay guide
+            </Button>
+          </div>
         </div>
         <div className="rounded-xl border border-border/70 bg-muted/20 px-4 py-3">
           <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
