@@ -24,6 +24,7 @@ import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard } from "lucide
 import { ActiveAgentsPanel } from "../components/ActiveAgentsPanel";
 import { ChartCard, RunActivityChart, PriorityChart, IssueStatusChart, SuccessRateChart } from "../components/ActivityCharts";
 import { OperatorPlaybookCard } from "../components/OperatorPlaybookCard";
+import { SystemHealthBanner } from "../components/SystemHealthBanner";
 import { PageSkeleton } from "../components/PageSkeleton";
 import type { Agent, Issue } from "@paperclipai/shared";
 import { PluginSlotOutlet } from "@/plugins/slots";
@@ -187,10 +188,23 @@ export function Dashboard() {
   }
 
   const hasNoAgents = agents !== undefined && agents.length === 0;
+  const failedRuns = (runs ?? []).filter((run) => run.status === "failed").length;
 
   return (
     <div className="space-y-6">
       {error && <p className="text-sm text-destructive">{error.message}</p>}
+
+      {data && (
+        <SystemHealthBanner
+          hasAgents={(agents?.length ?? 0) > 0}
+          hasIssues={(issues?.length ?? 0) > 0}
+          hasRuns={(runs?.length ?? 0) > 0}
+          agentErrors={data.agents.error}
+          failedRuns={failedRuns}
+          pendingApprovals={data.pendingApprovals}
+          onCreateAgent={() => openOnboarding({ initialStep: 2, companyId: selectedCompanyId! })}
+        />
+      )}
 
       {hasNoAgents && (
         <div className="flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 dark:border-amber-500/25 dark:bg-amber-950/60">
