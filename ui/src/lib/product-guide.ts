@@ -10,6 +10,13 @@ const WORKSPACE_GUIDE_PENDING_KEY = `paperclip.workspaceGuide.${GUIDE_VERSION}.p
 
 export const WORKSPACE_GUIDE_STEPS: ProductGuideStep[] = [
   {
+    id: "dashboard",
+    selector: '[data-guide-id="dashboard"]',
+    title: "Start each session on Dashboard",
+    description:
+      "Dashboard is your operating cockpit. It gives you the company health view and the step-by-step playbook for what to do next as you manage the system.",
+  },
+  {
     id: "new-issue",
     selector: '[data-guide-id="new-issue"]',
     title: "Start work from New Issue",
