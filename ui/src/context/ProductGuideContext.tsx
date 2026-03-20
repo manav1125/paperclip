@@ -37,6 +37,11 @@ export function ProductGuideProvider({ children }: { children: ReactNode }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [guideOpen, setGuideOpen] = useState(false);
   const autoStartedRef = useRef<Set<string>>(new Set());
+  const isWorkspaceRoute =
+    location.pathname !== "/landing" &&
+    location.pathname !== "/auth" &&
+    !location.pathname.startsWith("/invite/") &&
+    !location.pathname.startsWith("/board-claim/");
 
   const activeCompanyId = selectedCompanyId ?? companies[0]?.id ?? null;
 
@@ -46,12 +51,12 @@ export function ProductGuideProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const startWorkspaceGuide = useCallback(() => {
-    if (!activeCompanyId) return;
+    if (!activeCompanyId || !isWorkspaceRoute) return;
     if (isMobile) setSidebarOpen(true);
     setStepIndex(0);
     setGuideOpen(true);
     writePendingWorkspaceGuideCompanyId(activeCompanyId);
-  }, [activeCompanyId, isMobile, setSidebarOpen]);
+  }, [activeCompanyId, isMobile, isWorkspaceRoute, setSidebarOpen]);
 
   const queueWorkspaceGuide = useCallback((companyId: string | null) => {
     writePendingWorkspaceGuideCompanyId(companyId);
@@ -63,7 +68,14 @@ export function ProductGuideProvider({ children }: { children: ReactNode }) {
   }, [guideOpen, isMobile, setSidebarOpen]);
 
   useEffect(() => {
-    if (!activeCompanyId || onboardingOpen || location.pathname === "/auth") return;
+    if (!isWorkspaceRoute && guideOpen) {
+      closeGuide();
+      return;
+    }
+  }, [closeGuide, guideOpen, isWorkspaceRoute]);
+
+  useEffect(() => {
+    if (!activeCompanyId || onboardingOpen || !isWorkspaceRoute) return;
     if (guideOpen) return;
 
     const pendingCompanyId = readPendingWorkspaceGuideCompanyId();
@@ -81,7 +93,7 @@ export function ProductGuideProvider({ children }: { children: ReactNode }) {
     }, pendingCompanyId === activeCompanyId ? 350 : 900);
 
     return () => window.clearTimeout(timeoutId);
-  }, [activeCompanyId, guideOpen, isMobile, location.pathname, onboardingOpen, setSidebarOpen]);
+  }, [activeCompanyId, guideOpen, isMobile, isWorkspaceRoute, onboardingOpen, setSidebarOpen]);
 
   const handleNext = useCallback(() => {
     if (!activeCompanyId) {
@@ -123,7 +135,7 @@ export function ProductGuideProvider({ children }: { children: ReactNode }) {
   return (
     <ProductGuideContext.Provider value={value}>
       {children}
-      {guideOpen && (
+      {guideOpen && isWorkspaceRoute && (
         <ProductGuideOverlay
           step={WORKSPACE_GUIDE_STEPS[stepIndex]!}
           stepIndex={stepIndex}
