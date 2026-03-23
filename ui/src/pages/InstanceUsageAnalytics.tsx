@@ -1,0 +1,366 @@
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { BarChart3, Building2, Cpu, DollarSign, Layers3, ReceiptText } from "lucide-react";
+import { adminUsageApi } from "@/api/adminUsage";
+import { useBreadcrumbs } from "@/context/BreadcrumbContext";
+import { queryKeys } from "@/lib/queryKeys";
+import { formatCents, formatDateTime, formatTokens } from "@/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+
+type DatePreset = "mtd" | "7d" | "30d" | "ytd" | "all" | "custom";
+
+const PRESET_LABELS: Record<DatePreset, string> = {
+  mtd: "Month to Date",
+  "7d": "Last 7 Days",
+  "30d": "Last 30 Days",
+  ytd: "Year to Date",
+  all: "All Time",
+  custom: "Custom",
+};
+
+function computeRange(preset: DatePreset): { from: string; to: string } {
+  const now = new Date();
+  const to = now.toISOString();
+  switch (preset) {
+    case "mtd":
+      return { from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(), to };
+    case "7d":
+      return { from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(), to };
+    case "30d":
+      return { from: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(), to };
+    case "ytd":
+      return { from: new Date(now.getFullYear(), 0, 1).toISOString(), to };
+    case "all":
+      return { from: "", to: "" };
+    case "custom":
+      return { from: "", to: "" };
+  }
+}
+
+function SectionTable({
+  title,
+  description,
+  headers,
+  rows,
+}: {
+  title: string;
+  description: string;
+  headers: string[];
+  rows: Array<Array<ReactNode>>;
+}) {
+  return (
+    <Card>
+      <CardHeader className="space-y-1">
+        <CardTitle className="text-base">{title}</CardTitle>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                {headers.map((header) => (
+                  <th key={header} className="px-3 py-2 font-medium">
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={headers.length} className="px-3 py-4 text-sm text-muted-foreground">
+                    No usage captured in this time range yet.
+                  </td>
+                </tr>
+              ) : (
+                rows.map((row, index) => (
+                  <tr key={index} className="border-b border-border/60 last:border-b-0">
+                    {row.map((cell, cellIndex) => (
+                      <td key={cellIndex} className="px-3 py-3 align-top">
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function InstanceUsageAnalytics() {
+  const { setBreadcrumbs } = useBreadcrumbs();
+  const [preset, setPreset] = useState<DatePreset>("mtd");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+
+  useEffect(() => {
+    setBreadcrumbs([
+      { label: "Instance Settings", href: "/instance/settings/heartbeats" },
+      { label: "Usage & Costs" },
+    ]);
+  }, [setBreadcrumbs]);
+
+  const { from, to } = useMemo(() => {
+    if (preset === "custom") {
+      return {
+        from: customFrom ? new Date(customFrom).toISOString() : "",
+        to: customTo ? new Date(`${customTo}T23:59:59.999Z`).toISOString() : "",
+      };
+    }
+    return computeRange(preset);
+  }, [preset, customFrom, customTo]);
+
+  const analyticsQuery = useQuery({
+    queryKey: queryKeys.instance.usageAnalytics(from || undefined, to || undefined),
+    queryFn: async () => {
+      const [summary, byCompany, byProvider, byModel, byTask] = await Promise.all([
+        adminUsageApi.summary(from || undefined, to || undefined),
+        adminUsageApi.byCompany(from || undefined, to || undefined),
+        adminUsageApi.byProvider(from || undefined, to || undefined),
+        adminUsageApi.byModel(from || undefined, to || undefined),
+        adminUsageApi.byTask(from || undefined, to || undefined),
+      ]);
+      return { summary, byCompany, byProvider, byModel, byTask };
+    },
+  });
+
+  const presetKeys: DatePreset[] = ["mtd", "7d", "30d", "ytd", "all", "custom"];
+
+  if (analyticsQuery.isLoading) {
+    return <div className="text-sm text-muted-foreground">Loading usage analytics...</div>;
+  }
+
+  if (analyticsQuery.error) {
+    return (
+      <div className="max-w-5xl space-y-4">
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          {analyticsQuery.error instanceof Error
+            ? analyticsQuery.error.message
+            : "Failed to load usage analytics."}
+        </div>
+      </div>
+    );
+  }
+
+  const data = analyticsQuery.data!;
+
+  return (
+    <div className="max-w-6xl space-y-6">
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-muted-foreground" />
+          <h1 className="text-lg font-semibold">Usage & Cost Analytics</h1>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Cross-company LLM usage for instance admins. Use this view to understand provider mix,
+          task-level burn, and how much spend each company is driving before you finalize pricing.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {presetKeys.map((key) => (
+          <Button
+            key={key}
+            variant={preset === key ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setPreset(key)}
+          >
+            {PRESET_LABELS[key]}
+          </Button>
+        ))}
+        {preset === "custom" ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={customFrom}
+              onChange={(event) => setCustomFrom(event.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+            />
+            <span className="text-sm text-muted-foreground">to</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={(event) => setCustomTo(event.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Card>
+          <CardContent className="flex items-start gap-3 p-4">
+            <DollarSign className="mt-0.5 h-4 w-4 text-muted-foreground" />
+            <div>
+              <p className="text-sm text-muted-foreground">Total spend</p>
+              <p className="text-2xl font-semibold tabular-nums">{formatCents(data.summary.spendCents)}</p>
+              <p className="text-xs text-muted-foreground">{data.summary.apiCallCount} billable LLM events</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-start gap-3 p-4">
+            <ReceiptText className="mt-0.5 h-4 w-4 text-muted-foreground" />
+            <div>
+              <p className="text-sm text-muted-foreground">Token usage</p>
+              <p className="text-2xl font-semibold tabular-nums">
+                {formatTokens(data.summary.inputTokens + data.summary.outputTokens)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                in {formatTokens(data.summary.inputTokens)} / out {formatTokens(data.summary.outputTokens)}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-start gap-3 p-4">
+            <Building2 className="mt-0.5 h-4 w-4 text-muted-foreground" />
+            <div>
+              <p className="text-sm text-muted-foreground">Active orgs</p>
+              <p className="text-2xl font-semibold tabular-nums">{data.summary.companyCount}</p>
+              <p className="text-xs text-muted-foreground">{data.summary.issueCount} task threads attributed</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-start gap-3 p-4">
+            <Cpu className="mt-0.5 h-4 w-4 text-muted-foreground" />
+            <div>
+              <p className="text-sm text-muted-foreground">Provider mix</p>
+              <p className="text-2xl font-semibold tabular-nums">{data.summary.providerCount}</p>
+              <p className="text-xs text-muted-foreground">{data.summary.modelCount} active models</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <SectionTable
+        title="By Organization"
+        description="See which companies are driving the most spend and token usage."
+        headers={["Organization", "Spend", "Tokens", "LLM events", "Active agents"]}
+        rows={data.byCompany.map((row) => [
+          <div className="space-y-1" key={`${row.companyId}-org`}>
+            <div className="font-medium">{row.companyName}</div>
+            <div className="text-xs text-muted-foreground">{row.issuePrefix}</div>
+          </div>,
+          <span className="tabular-nums font-medium" key={`${row.companyId}-spend`}>
+            {formatCents(row.spendCents)}
+          </span>,
+          <span className="tabular-nums text-muted-foreground" key={`${row.companyId}-tokens`}>
+            {formatTokens(row.inputTokens + row.outputTokens)}
+          </span>,
+          <span className="tabular-nums" key={`${row.companyId}-calls`}>
+            {row.apiCallCount}
+          </span>,
+          <span className="tabular-nums" key={`${row.companyId}-agents`}>
+            {row.activeAgentCount}
+          </span>,
+        ])}
+      />
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <SectionTable
+          title="By Provider"
+          description="Provider-level burn helps with pricing strategy and vendor negotiations."
+          headers={["Provider", "Spend", "Tokens", "LLM events", "Orgs / Models"]}
+          rows={data.byProvider.map((row) => [
+            <Badge variant="outline" className="w-fit" key={`${row.provider}-provider`}>
+              {row.provider}
+            </Badge>,
+            <span className="tabular-nums font-medium" key={`${row.provider}-spend`}>
+              {formatCents(row.spendCents)}
+            </span>,
+            <span className="tabular-nums text-muted-foreground" key={`${row.provider}-tokens`}>
+              {formatTokens(row.inputTokens + row.outputTokens)}
+            </span>,
+            <span className="tabular-nums" key={`${row.provider}-calls`}>
+              {row.apiCallCount}
+            </span>,
+            <span className="text-muted-foreground" key={`${row.provider}-scope`}>
+              {row.companyCount} orgs / {row.modelCount} models
+            </span>,
+          ])}
+        />
+
+        <SectionTable
+          title="By Model"
+          description="Use this to see where premium models are burning budget."
+          headers={["Model", "Spend", "Tokens", "LLM events", "Organizations"]}
+          rows={data.byModel.map((row) => [
+            <div className="space-y-1" key={`${row.provider}-${row.model}-model`}>
+              <div className="font-medium">{row.model}</div>
+              <div className="text-xs text-muted-foreground">{row.provider}</div>
+            </div>,
+            <span className="tabular-nums font-medium" key={`${row.provider}-${row.model}-spend`}>
+              {formatCents(row.spendCents)}
+            </span>,
+            <span className="tabular-nums text-muted-foreground" key={`${row.provider}-${row.model}-tokens`}>
+              {formatTokens(row.inputTokens + row.outputTokens)}
+            </span>,
+            <span className="tabular-nums" key={`${row.provider}-${row.model}-calls`}>
+              {row.apiCallCount}
+            </span>,
+            <span className="tabular-nums" key={`${row.provider}-${row.model}-orgs`}>
+              {row.companyCount}
+            </span>,
+          ])}
+        />
+      </div>
+
+      <SectionTable
+        title="By Task"
+        description="Task-level attribution makes it easier to understand which workflows are expensive and which ones deserve fixed pricing or limits."
+        headers={["Task", "Organization", "Project / Goal", "Spend", "LLM events", "Last event"]}
+        rows={data.byTask.slice(0, 25).map((row) => [
+          <div className="space-y-1" key={`${row.companyId}-${row.issueId ?? "unattributed"}-task`}>
+            <div className="font-medium">
+              {row.issueTitle ?? "Unattributed usage"}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {row.issueIdentifier ?? "No issue linked"}
+            </div>
+          </div>,
+          <span key={`${row.companyId}-${row.issueId ?? "unattributed"}-org`}>
+            {row.companyName}
+          </span>,
+          <div className="space-y-1" key={`${row.companyId}-${row.issueId ?? "unattributed"}-scope`}>
+            <div>{row.projectName ?? "No project"}</div>
+            <div className="text-xs text-muted-foreground">
+              {row.goalTitle ?? "No goal"}
+            </div>
+          </div>,
+          <div className="space-y-1" key={`${row.companyId}-${row.issueId ?? "unattributed"}-spend`}>
+            <div className="tabular-nums font-medium">{formatCents(row.spendCents)}</div>
+            <div className="text-xs text-muted-foreground">
+              {formatTokens(row.inputTokens + row.outputTokens)} tok
+            </div>
+          </div>,
+          <span className="tabular-nums" key={`${row.companyId}-${row.issueId ?? "unattributed"}-calls`}>
+            {row.apiCallCount}
+          </span>,
+          <span className="text-muted-foreground" key={`${row.companyId}-${row.issueId ?? "unattributed"}-time`}>
+            {row.latestOccurredAt ? formatDateTime(row.latestOccurredAt) : "Unknown"}
+          </span>,
+        ])}
+      />
+
+      <Card>
+        <CardContent className="flex items-start gap-3 p-4 text-sm text-muted-foreground">
+          <Layers3 className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            This first cut is optimized for pricing discovery. It tracks cost events per org,
+            provider, model, and task. The most important remaining improvement is deeper request-level
+            telemetry if you later want margin analysis by feature or per-seat packaging.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

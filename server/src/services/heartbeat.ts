@@ -1348,8 +1348,27 @@ export function heartbeatService(db: Db) {
 
     if (additionalCostCents > 0 || hasTokenUsage) {
       const costs = costService(db);
+      const context = (run.contextSnapshot ?? {}) as Record<string, unknown>;
+      const issueId = readNonEmptyString(context.issueId);
+      const contextProjectId = readNonEmptyString(context.projectId);
+      const contextGoalId = readNonEmptyString(context.goalId);
+      const issueContext = issueId
+        ? await db
+            .select({
+              projectId: issues.projectId,
+              goalId: issues.goalId,
+              billingCode: issues.billingCode,
+            })
+            .from(issues)
+            .where(and(eq(issues.id, issueId), eq(issues.companyId, agent.companyId)))
+            .then((rows) => rows[0] ?? null)
+        : null;
       await costs.createEvent(agent.companyId, {
         agentId: agent.id,
+        issueId,
+        projectId: issueContext?.projectId ?? contextProjectId,
+        goalId: issueContext?.goalId ?? contextGoalId,
+        billingCode: issueContext?.billingCode ?? null,
         provider: result.provider ?? "unknown",
         model: result.model ?? "unknown",
         inputTokens,

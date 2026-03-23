@@ -3,7 +3,7 @@ import type { Db } from "@paperclipai/db";
 import { createCostEventSchema, updateBudgetSchema } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
 import { costService, companyService, agentService, logActivity } from "../services/index.js";
-import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
+import { assertBoard, assertCompanyAccess, assertInstanceAdmin, getActorInfo } from "./authz.js";
 
 export function costRoutes(db: Db) {
   const router = Router();
@@ -67,6 +67,41 @@ export function costRoutes(db: Db) {
     assertCompanyAccess(req, companyId);
     const range = parseDateRange(req.query);
     const rows = await costs.byProject(companyId, range);
+    res.json(rows);
+  });
+
+  router.get("/admin/usage/summary", async (req, res) => {
+    assertInstanceAdmin(req);
+    const range = parseDateRange(req.query);
+    const summary = await costs.adminSummary(range);
+    res.json(summary);
+  });
+
+  router.get("/admin/usage/by-company", async (req, res) => {
+    assertInstanceAdmin(req);
+    const range = parseDateRange(req.query);
+    const rows = await costs.adminByCompany(range);
+    res.json(rows);
+  });
+
+  router.get("/admin/usage/by-provider", async (req, res) => {
+    assertInstanceAdmin(req);
+    const range = parseDateRange(req.query);
+    const rows = await costs.adminByProvider(range);
+    res.json(rows);
+  });
+
+  router.get("/admin/usage/by-model", async (req, res) => {
+    assertInstanceAdmin(req);
+    const range = parseDateRange(req.query);
+    const rows = await costs.adminByModel(range);
+    res.json(rows);
+  });
+
+  router.get("/admin/usage/by-task", async (req, res) => {
+    assertInstanceAdmin(req);
+    const range = parseDateRange(req.query);
+    const rows = await costs.adminByTask(range);
     res.json(rows);
   });
 
