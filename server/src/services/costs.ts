@@ -1,11 +1,21 @@
-import { and, desc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, lte, sql, type SQL } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { activityLog, agents, companies, costEvents, heartbeatRuns, issues, projects } from "@paperclipai/db";
+import { activityLog, agents, companies, costEvents, goals, heartbeatRuns, issues, projects } from "@paperclipai/db";
 import { notFound, unprocessable } from "../errors.js";
 
 export interface CostDateRange {
   from?: Date;
   to?: Date;
+}
+
+function buildCostEventConditions(companyId?: string, range?: CostDateRange): SQL<unknown>[] {
+  const conditions: SQL<unknown>[] = [];
+  if (companyId) {
+    conditions.push(eq(costEvents.companyId, companyId));
+  }
+  if (range?.from) conditions.push(gte(costEvents.occurredAt, range.from));
+  if (range?.to) conditions.push(lte(costEvents.occurredAt, range.to));
+  return conditions;
 }
 
 export function costService(db: Db) {
@@ -75,9 +85,7 @@ export function costService(db: Db) {
 
       if (!company) throw notFound("Company not found");
 
-      const conditions: ReturnType<typeof eq>[] = [eq(costEvents.companyId, companyId)];
-      if (range?.from) conditions.push(gte(costEvents.occurredAt, range.from));
-      if (range?.to) conditions.push(lte(costEvents.occurredAt, range.to));
+      const conditions = buildCostEventConditions(companyId, range);
 
       const [{ total }] = await db
         .select({
@@ -101,9 +109,7 @@ export function costService(db: Db) {
     },
 
     byAgent: async (companyId: string, range?: CostDateRange) => {
-      const conditions: ReturnType<typeof eq>[] = [eq(costEvents.companyId, companyId)];
-      if (range?.from) conditions.push(gte(costEvents.occurredAt, range.from));
-      if (range?.to) conditions.push(lte(costEvents.occurredAt, range.to));
+      const conditions = buildCostEventConditions(companyId, range);
 
       const costRows = await db
         .select({
@@ -199,6 +205,131 @@ export function costService(db: Db) {
         .where(and(...conditions))
         .groupBy(runProjectLinks.projectId, projects.name)
         .orderBy(desc(costCentsExpr));
+    },
+
+    adminSummary: async (range?: CostDateRange) => {
+      const conditions = buildCostEventConditions(undefined, range);
+
+      const [row] = await db
+        .select({
+          spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+          inputTokens: sql<number>`coalesce(sum(${costEvents.inputTokens}), 0)::int`,
+          outputTokens: sql<number>`coalesce(sum(${costEvents.outputTokens}), 0)::int`,
+          apiCallCount: sql<number>`count(*)::int`,
+          companyCount: sql<number>`count(distinct ${costEvents.companyId})::int`,
+          providerCount: sql<number>`count(distinct ${costEvents.provider})::int`,
+          modelCount: sql<number>`count(distinct ${costEvents.model})::int`,
+          issueCount: sql<number>`count(distinct ${costEvents.issueId})::int`,
+        })
+        .from(costEvents)
+        .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+      return row;
+    },
+
+    adminByCompany: async (range?: CostDateRange) => {
+      const conditions = buildCostEventConditions(undefined, range);
+
+      return db
+        .select({
+          companyId: costEvents.companyId,
+          companyName: companies.name,
+          issuePrefix: companies.issuePrefix,
+          spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+          inputTokens: sql<number>`coalesce(sum(${costEvents.inputTokens}), 0)::int`,
+          outputTokens: sql<number>`coalesce(sum(${costEvents.outputTokens}), 0)::int`,
+          apiCallCount: sql<number>`count(*)::int`,
+          activeAgentCount: sql<number>`count(distinct ${costEvents.agentId})::int`,
+        })
+        .from(costEvents)
+        .innerJoin(companies, eq(costEvents.companyId, companies.id))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .groupBy(costEvents.companyId, companies.name, companies.issuePrefix)
+        .orderBy(desc(sql`coalesce(sum(${costEvents.costCents}), 0)::int`));
+    },
+
+    adminByProvider: async (range?: CostDateRange) => {
+      const conditions = buildCostEventConditions(undefined, range);
+
+      return db
+        .select({
+          provider: costEvents.provider,
+          spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+          inputTokens: sql<number>`coalesce(sum(${costEvents.inputTokens}), 0)::int`,
+          outputTokens: sql<number>`coalesce(sum(${costEvents.outputTokens}), 0)::int`,
+          apiCallCount: sql<number>`count(*)::int`,
+          companyCount: sql<number>`count(distinct ${costEvents.companyId})::int`,
+          modelCount: sql<number>`count(distinct ${costEvents.model})::int`,
+        })
+        .from(costEvents)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .groupBy(costEvents.provider)
+        .orderBy(desc(sql`coalesce(sum(${costEvents.costCents}), 0)::int`));
+    },
+
+    adminByModel: async (range?: CostDateRange) => {
+      const conditions = buildCostEventConditions(undefined, range);
+
+      return db
+        .select({
+          provider: costEvents.provider,
+          model: costEvents.model,
+          spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+          inputTokens: sql<number>`coalesce(sum(${costEvents.inputTokens}), 0)::int`,
+          outputTokens: sql<number>`coalesce(sum(${costEvents.outputTokens}), 0)::int`,
+          apiCallCount: sql<number>`count(*)::int`,
+          companyCount: sql<number>`count(distinct ${costEvents.companyId})::int`,
+        })
+        .from(costEvents)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .groupBy(costEvents.provider, costEvents.model)
+        .orderBy(desc(sql`coalesce(sum(${costEvents.costCents}), 0)::int`));
+    },
+
+    adminByTask: async (range?: CostDateRange) => {
+      const conditions = buildCostEventConditions(undefined, range);
+
+      return db
+        .select({
+          companyId: costEvents.companyId,
+          companyName: companies.name,
+          issueId: costEvents.issueId,
+          issueIdentifier: issues.identifier,
+          issueTitle: issues.title,
+          projectId: sql<string | null>`coalesce(${costEvents.projectId}, ${issues.projectId})`,
+          projectName: projects.name,
+          goalId: sql<string | null>`coalesce(${costEvents.goalId}, ${issues.goalId})`,
+          goalTitle: goals.title,
+          spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+          inputTokens: sql<number>`coalesce(sum(${costEvents.inputTokens}), 0)::int`,
+          outputTokens: sql<number>`coalesce(sum(${costEvents.outputTokens}), 0)::int`,
+          apiCallCount: sql<number>`count(*)::int`,
+          latestOccurredAt: sql<Date | null>`max(${costEvents.occurredAt})`,
+        })
+        .from(costEvents)
+        .innerJoin(companies, eq(costEvents.companyId, companies.id))
+        .leftJoin(issues, eq(costEvents.issueId, issues.id))
+        .leftJoin(
+          projects,
+          sql`${projects.id} = coalesce(${costEvents.projectId}, ${issues.projectId})`,
+        )
+        .leftJoin(
+          goals,
+          sql`${goals.id} = coalesce(${costEvents.goalId}, ${issues.goalId})`,
+        )
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .groupBy(
+          costEvents.companyId,
+          companies.name,
+          costEvents.issueId,
+          issues.identifier,
+          issues.title,
+          sql`coalesce(${costEvents.projectId}, ${issues.projectId})`,
+          projects.name,
+          sql`coalesce(${costEvents.goalId}, ${issues.goalId})`,
+          goals.title,
+        )
+        .orderBy(desc(sql`coalesce(sum(${costEvents.costCents}), 0)::int`), desc(sql`max(${costEvents.occurredAt})`));
     },
   };
 }

@@ -40,7 +40,11 @@ function normalizeRememberedInstanceSettingsPath(rawPath: string | null): string
   const search = match?.[2] ?? "";
   const hash = match?.[3] ?? "";
 
-  if (pathname === "/instance/settings/heartbeats" || pathname === "/instance/settings/plugins") {
+  if (
+    pathname === "/instance/settings/heartbeats" ||
+    pathname === "/instance/settings/usage" ||
+    pathname === "/instance/settings/plugins"
+  ) {
     return `${pathname}${search}${hash}`;
   }
 

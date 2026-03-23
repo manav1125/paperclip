@@ -22,6 +22,16 @@ export function assertCompanyAccess(req: Request, companyId: string) {
   }
 }
 
+export function assertInstanceAdmin(req: Request) {
+  if (req.actor.type !== "board") {
+    throw unauthorized();
+  }
+  if (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin) {
+    return;
+  }
+  throw forbidden("Instance admin required");
+}
+
 export function getActorInfo(req: Request) {
   if (req.actor.type === "none") {
     throw unauthorized();
