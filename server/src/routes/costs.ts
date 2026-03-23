@@ -1,9 +1,9 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import type { Db } from "@paperclipai/db";
 import { createCostEventSchema, updateBudgetSchema } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
 import { costService, companyService, agentService, logActivity } from "../services/index.js";
-import { assertBoard, assertCompanyAccess, assertInstanceAdmin, getActorInfo } from "./authz.js";
+import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
 
 export function costRoutes(db: Db) {
   const router = Router();
@@ -46,6 +46,17 @@ export function costRoutes(db: Db) {
     return (from || to) ? { from, to } : undefined;
   }
 
+  function resolveAdminUsageCompanyScope(req: Request, res: Response) {
+    if (req.actor.type !== "board") {
+      res.status(401).json({ error: "Unauthorized" });
+      return null;
+    }
+    if (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin) {
+      return undefined;
+    }
+    return req.actor.companyIds ?? [];
+  }
+
   router.get("/companies/:companyId/costs/summary", async (req, res) => {
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
@@ -71,37 +82,42 @@ export function costRoutes(db: Db) {
   });
 
   router.get("/admin/usage/summary", async (req, res) => {
-    assertInstanceAdmin(req);
+    const companyIds = resolveAdminUsageCompanyScope(req, res);
+    if (companyIds === null) return;
     const range = parseDateRange(req.query);
-    const summary = await costs.adminSummary(range);
+    const summary = await costs.adminSummary(companyIds, range);
     res.json(summary);
   });
 
   router.get("/admin/usage/by-company", async (req, res) => {
-    assertInstanceAdmin(req);
+    const companyIds = resolveAdminUsageCompanyScope(req, res);
+    if (companyIds === null) return;
     const range = parseDateRange(req.query);
-    const rows = await costs.adminByCompany(range);
+    const rows = await costs.adminByCompany(companyIds, range);
     res.json(rows);
   });
 
   router.get("/admin/usage/by-provider", async (req, res) => {
-    assertInstanceAdmin(req);
+    const companyIds = resolveAdminUsageCompanyScope(req, res);
+    if (companyIds === null) return;
     const range = parseDateRange(req.query);
-    const rows = await costs.adminByProvider(range);
+    const rows = await costs.adminByProvider(companyIds, range);
     res.json(rows);
   });
 
   router.get("/admin/usage/by-model", async (req, res) => {
-    assertInstanceAdmin(req);
+    const companyIds = resolveAdminUsageCompanyScope(req, res);
+    if (companyIds === null) return;
     const range = parseDateRange(req.query);
-    const rows = await costs.adminByModel(range);
+    const rows = await costs.adminByModel(companyIds, range);
     res.json(rows);
   });
 
   router.get("/admin/usage/by-task", async (req, res) => {
-    assertInstanceAdmin(req);
+    const companyIds = resolveAdminUsageCompanyScope(req, res);
+    if (companyIds === null) return;
     const range = parseDateRange(req.query);
-    const rows = await costs.adminByTask(range);
+    const rows = await costs.adminByTask(companyIds, range);
     res.json(rows);
   });
 
