@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNotNull, lte, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lte, sql, type SQL } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { activityLog, agents, companies, costEvents, goals, heartbeatRuns, issues, projects } from "@paperclipai/db";
 import { notFound, unprocessable } from "../errors.js";
@@ -8,10 +8,20 @@ export interface CostDateRange {
   to?: Date;
 }
 
-function buildCostEventConditions(companyId?: string, range?: CostDateRange): SQL<unknown>[] {
+function buildCostEventConditions(
+  companyId?: string,
+  companyIds?: string[] | null,
+  range?: CostDateRange,
+): SQL<unknown>[] {
   const conditions: SQL<unknown>[] = [];
   if (companyId) {
     conditions.push(eq(costEvents.companyId, companyId));
+  } else if (companyIds) {
+    if (companyIds.length === 0) {
+      conditions.push(sql`1 = 0`);
+    } else {
+      conditions.push(inArray(costEvents.companyId, companyIds));
+    }
   }
   if (range?.from) conditions.push(gte(costEvents.occurredAt, range.from));
   if (range?.to) conditions.push(lte(costEvents.occurredAt, range.to));
@@ -85,7 +95,7 @@ export function costService(db: Db) {
 
       if (!company) throw notFound("Company not found");
 
-      const conditions = buildCostEventConditions(companyId, range);
+      const conditions = buildCostEventConditions(companyId, undefined, range);
 
       const [{ total }] = await db
         .select({
@@ -109,7 +119,7 @@ export function costService(db: Db) {
     },
 
     byAgent: async (companyId: string, range?: CostDateRange) => {
-      const conditions = buildCostEventConditions(companyId, range);
+      const conditions = buildCostEventConditions(companyId, undefined, range);
 
       const costRows = await db
         .select({
@@ -207,8 +217,8 @@ export function costService(db: Db) {
         .orderBy(desc(costCentsExpr));
     },
 
-    adminSummary: async (range?: CostDateRange) => {
-      const conditions = buildCostEventConditions(undefined, range);
+    adminSummary: async (companyIds?: string[] | null, range?: CostDateRange) => {
+      const conditions = buildCostEventConditions(undefined, companyIds, range);
 
       const [row] = await db
         .select({
@@ -227,8 +237,8 @@ export function costService(db: Db) {
       return row;
     },
 
-    adminByCompany: async (range?: CostDateRange) => {
-      const conditions = buildCostEventConditions(undefined, range);
+    adminByCompany: async (companyIds?: string[] | null, range?: CostDateRange) => {
+      const conditions = buildCostEventConditions(undefined, companyIds, range);
 
       return db
         .select({
@@ -248,8 +258,8 @@ export function costService(db: Db) {
         .orderBy(desc(sql`coalesce(sum(${costEvents.costCents}), 0)::int`));
     },
 
-    adminByProvider: async (range?: CostDateRange) => {
-      const conditions = buildCostEventConditions(undefined, range);
+    adminByProvider: async (companyIds?: string[] | null, range?: CostDateRange) => {
+      const conditions = buildCostEventConditions(undefined, companyIds, range);
 
       return db
         .select({
@@ -267,8 +277,8 @@ export function costService(db: Db) {
         .orderBy(desc(sql`coalesce(sum(${costEvents.costCents}), 0)::int`));
     },
 
-    adminByModel: async (range?: CostDateRange) => {
-      const conditions = buildCostEventConditions(undefined, range);
+    adminByModel: async (companyIds?: string[] | null, range?: CostDateRange) => {
+      const conditions = buildCostEventConditions(undefined, companyIds, range);
 
       return db
         .select({
@@ -286,8 +296,8 @@ export function costService(db: Db) {
         .orderBy(desc(sql`coalesce(sum(${costEvents.costCents}), 0)::int`));
     },
 
-    adminByTask: async (range?: CostDateRange) => {
-      const conditions = buildCostEventConditions(undefined, range);
+    adminByTask: async (companyIds?: string[] | null, range?: CostDateRange) => {
+      const conditions = buildCostEventConditions(undefined, companyIds, range);
 
       return db
         .select({
