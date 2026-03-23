@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Paperclip — Run Zero-Human Companies in the Cloud</title>
+<title>Paperclip — Powered by Venture Network</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@300;400;500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -128,6 +128,46 @@ nav .container { display: flex; align-items: center; justify-content: space-betw
   transform: translateY(-2px);
   box-shadow: 0 0 50px rgba(255,107,43,0.3), 0 8px 24px rgba(0,0,0,0.4);
 }
+.venture-powered {
+  display: flex; align-items: center; gap: 10px;
+  margin-left: 16px; padding-left: 16px;
+  border-left: 1px solid rgba(255,255,255,0.08);
+}
+.venture-mark {
+  position: relative;
+  width: 30px; height: 18px;
+  flex-shrink: 0;
+}
+.venture-triangle {
+  position: absolute; left: 0; top: 0;
+  width: 0; height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 18px solid #ff4d1f;
+}
+.venture-dot {
+  position: absolute; right: 0; bottom: 0;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: #ff4d1f;
+  box-shadow: 0 0 18px rgba(255,77,31,0.25);
+}
+.venture-copy {
+  display: flex; flex-direction: column;
+  gap: 2px;
+}
+.venture-copy-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: var(--text3);
+}
+.venture-copy-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+}
 
 /* ── HERO ── */
 .hero {
@@ -202,6 +242,18 @@ nav .container { display: flex; align-items: center; justify-content: space-betw
   margin: 0 auto 36px; line-height: 1.65; font-weight: 400;
   animation: hero-fade 1s ease 0.3s both;
 }
+.hero-powered {
+  display: inline-flex; align-items: center; gap: 12px;
+  margin: 0 auto 34px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  backdrop-filter: blur(10px);
+  color: var(--text2);
+  font-size: 13px;
+}
+.hero-powered strong { color: var(--text); }
 .hero-actions {
   display: flex; align-items: center; justify-content: center;
   gap: 16px; flex-wrap: wrap;
@@ -822,6 +874,7 @@ footer {
 }
 @media (max-width: 700px) {
   .nav-links { display: none; }
+  .venture-powered { display: none; }
   section { padding: 64px 0; }
   .hero { padding: 100px 0 48px; }
   h1 { letter-spacing: -2px; }
@@ -846,6 +899,16 @@ footer {
       </span>
       Paperclip
     </a>
+    <div class="venture-powered" aria-label="Powered by Venture Network">
+      <div class="venture-mark" aria-hidden="true">
+        <span class="venture-triangle"></span>
+        <span class="venture-dot"></span>
+      </div>
+      <div class="venture-copy">
+        <span class="venture-copy-label">Powered by</span>
+        <span class="venture-copy-name">Venture Network</span>
+      </div>
+    </div>
     <ul class="nav-links">
       <li><a href="#features">Features</a></li>
       <li><a href="#how-it-works">How It Works</a></li>
@@ -864,7 +927,7 @@ footer {
   <div class="container">
     <div class="hero-badge">
       <span class="pulse"></span>
-      Public beta — built on <strong style="color:var(--text); margin-left:2px;">paperclip.ing</strong>
+      Public beta — powered by <strong style="color:var(--text); margin-left:2px;">Venture Network</strong>
     </div>
     <h1>
       Build companies that<br>
@@ -874,6 +937,13 @@ footer {
       Paperclip Cloud is the managed platform for the open-source Paperclip orchestrator.
       Hire AI agents, define goals, set budgets — your business executes autonomously.
     </p>
+    <div class="hero-powered">
+      <div class="venture-mark" aria-hidden="true">
+        <span class="venture-triangle"></span>
+        <span class="venture-dot"></span>
+      </div>
+      <span>Built and backed by <strong>Venture Network</strong> for operators building AI-native companies.</span>
+    </div>
     <div class="hero-actions">
       <a href="/auth?next=%2Fonboarding" target="_top" class="btn-glow">
         Launch Your Company
@@ -1367,7 +1437,7 @@ footer {
 <!-- ═══════ FOOTER ═══════ -->
 <footer>
   <div class="container footer-inner">
-    <div class="footer-left">© 2026 Paperclip · Open source under MIT · Built on <a href="https://paperclip.ing" target="_blank" style="color:var(--text2);text-decoration:underline;">paperclip.ing</a></div>
+    <div class="footer-left">© 2026 Paperclip · Powered by Venture Network · Built on <a href="https://paperclip.ing" target="_blank" style="color:var(--text2);text-decoration:underline;">paperclip.ing</a></div>
     <ul class="footer-links">
       <li><a href="https://github.com/manav1125/paperclip" target="_blank">GitHub</a></li>
       <li><a href="https://docs.paperclip.ing/" target="_blank">Docs</a></li>
