@@ -42,12 +42,15 @@ ENV NODE_ENV=production \
   HOME=/paperclip \
   HOST=0.0.0.0 \
   PORT=3100 \
+  NODE_OPTIONS=--max-old-space-size=384 \
   SERVE_UI=true \
   PAPERCLIP_HOME=/paperclip \
   PAPERCLIP_INSTANCE_ID=default \
   PAPERCLIP_CONFIG=/paperclip/instances/default/config.json \
   PAPERCLIP_DEPLOYMENT_MODE=authenticated \
-  PAPERCLIP_DEPLOYMENT_EXPOSURE=private
+  PAPERCLIP_DEPLOYMENT_EXPOSURE=private \
+  HEARTBEAT_GLOBAL_MAX_CONCURRENT_RUNS=1 \
+  PAPERCLIP_MEMORY_SOFT_LIMIT_MB=440
 
 VOLUME ["/paperclip"]
 EXPOSE 3100

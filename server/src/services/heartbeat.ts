@@ -47,6 +47,25 @@ const HEARTBEAT_MAX_CONCURRENT_RUNS_MAX = 10;
 const DEFERRED_WAKE_CONTEXT_KEY = "_paperclipWakeContext";
 const startLocksByAgent = new Map<string, Promise<void>>();
 const REPO_ONLY_CWD_SENTINEL = "/__paperclip_repo_only__";
+const IS_RENDER =
+  process.env.RENDER === "true" ||
+  Boolean(process.env.RENDER_SERVICE_ID) ||
+  Boolean(process.env.RENDER_INSTANCE_ID);
+const HEARTBEAT_GLOBAL_MAX_CONCURRENT_RUNS = Math.max(
+  0,
+  Math.floor(
+    Number(process.env.HEARTBEAT_GLOBAL_MAX_CONCURRENT_RUNS) ||
+      (IS_RENDER ? 1 : 0),
+  ),
+);
+const PAPERCLIP_MEMORY_SOFT_LIMIT_MB = Math.max(
+  0,
+  Math.floor(
+    Number(process.env.PAPERCLIP_MEMORY_SOFT_LIMIT_MB) ||
+      (IS_RENDER ? 440 : 0),
+  ),
+);
+let lastResourcePressureLogAt = 0;
 const SESSIONED_LOCAL_ADAPTERS = new Set([
   "claude_local",
   "codex_local",
@@ -95,6 +114,26 @@ function normalizeMaxConcurrentRuns(value: unknown) {
   const parsed = Math.floor(asNumber(value, HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT));
   if (!Number.isFinite(parsed)) return HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT;
   return Math.max(HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT, Math.min(HEARTBEAT_MAX_CONCURRENT_RUNS_MAX, parsed));
+}
+
+function isMemoryPressureActive() {
+  if (PAPERCLIP_MEMORY_SOFT_LIMIT_MB <= 0) return false;
+  const rssMb = Math.round(process.memoryUsage().rss / (1024 * 1024));
+  if (rssMb < PAPERCLIP_MEMORY_SOFT_LIMIT_MB) return false;
+
+  const now = Date.now();
+  if (now - lastResourcePressureLogAt >= 30_000) {
+    lastResourcePressureLogAt = now;
+    logger.warn(
+      {
+        rssMb,
+        softLimitMb: PAPERCLIP_MEMORY_SOFT_LIMIT_MB,
+        globalRunCap: HEARTBEAT_GLOBAL_MAX_CONCURRENT_RUNS,
+      },
+      "memory pressure active; deferring new heartbeat executions",
+    );
+  }
+  return true;
 }
 
 async function withAgentStartLock<T>(agentId: string, fn: () => Promise<T>) {
@@ -1137,6 +1176,14 @@ export function heartbeatService(db: Db) {
     return Number(count ?? 0);
   }
 
+  async function countRunningRunsGlobal() {
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(heartbeatRuns)
+      .where(eq(heartbeatRuns.status, "running"));
+    return Number(count ?? 0);
+  }
+
   async function claimQueuedRun(run: typeof heartbeatRuns.$inferSelect) {
     if (run.status !== "queued") return run;
     const claimedAt = new Date();
@@ -1350,9 +1397,19 @@ export function heartbeatService(db: Db) {
     return withAgentStartLock(agentId, async () => {
       const agent = await getAgent(agentId);
       if (!agent) return [];
+      if (isMemoryPressureActive()) return [];
       const policy = parseHeartbeatPolicy(agent);
       const runningCount = await countRunningRunsForAgent(agentId);
-      const availableSlots = Math.max(0, policy.maxConcurrentRuns - runningCount);
+      const agentAvailableSlots = Math.max(0, policy.maxConcurrentRuns - runningCount);
+      let availableSlots = agentAvailableSlots;
+      if (HEARTBEAT_GLOBAL_MAX_CONCURRENT_RUNS > 0) {
+        const globalRunningCount = await countRunningRunsGlobal();
+        const globalAvailableSlots = Math.max(
+          0,
+          HEARTBEAT_GLOBAL_MAX_CONCURRENT_RUNS - globalRunningCount,
+        );
+        availableSlots = Math.min(agentAvailableSlots, globalAvailableSlots);
+      }
       if (availableSlots <= 0) return [];
 
       const queuedRuns = await db
