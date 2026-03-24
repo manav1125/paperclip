@@ -20,6 +20,8 @@ services:
         value: 0.0.0.0
       - key: PORT
         value: "10000"
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=384
       - key: SERVE_UI
         value: "true"
       - key: PAPERCLIP_HOME
@@ -30,6 +32,10 @@ services:
         value: authenticated
       - key: PAPERCLIP_DEPLOYMENT_EXPOSURE
         value: public
+      - key: HEARTBEAT_GLOBAL_MAX_CONCURRENT_RUNS
+        value: "1"
+      - key: PAPERCLIP_MEMORY_SOFT_LIMIT_MB
+        value: "440"
       - key: PAPERCLIP_PUBLIC_URL
         sync: false
       - key: DATABASE_URL

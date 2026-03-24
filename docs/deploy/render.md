@@ -53,8 +53,18 @@ Paperclip can run against hosted Postgres, but it still benefits from persistent
 - Database plan: `basic-256mb` for an initial pilot
 - Disk size: `10 GB`
 
+For `starter`, also set:
+
+- `NODE_OPTIONS=--max-old-space-size=384`
+- `HEARTBEAT_GLOBAL_MAX_CONCURRENT_RUNS=1`
+- `PAPERCLIP_MEMORY_SOFT_LIMIT_MB=440`
+
+Those settings reduce the chance that local adapter execution will push the service over Render's 512 MB memory ceiling.
+
 ## Important caveat for hosted control-plane v1
 
 Render runs the agents inside the Paperclip container. If you want agents to work on private company repos, give the service Git credentials and clone those repos into a persistent path under `/paperclip`.
 
 If you plan to run many concurrent agents or long-lived coding sessions, consider moving execution off the single web service or upgrading the instance size. The hosted SaaS surface works well on Render, but agent execution capacity is still tied to that single runtime today.
+
+If you see Render events like `Ran out of memory (used over 512MB)`, Paperclip is telling you the truth about the architecture: the control plane and execution plane are sharing one small container. The guardrails above help, but the real production answer is either a larger plan or a separate execution service.
