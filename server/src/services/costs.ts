@@ -8,6 +8,43 @@ export interface CostDateRange {
   to?: Date;
 }
 
+export interface AdminPricingPlanInput {
+  targetGrossMarginPct?: number;
+  overageMarginPct?: number;
+  safetyOverheadPct?: number;
+  reservePct?: number;
+  minimumPlanPriceCents?: number;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
+function safeDivide(numerator: number, denominator: number): number {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return 0;
+  return numerator / denominator;
+}
+
+function roundUp(value: number, step: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  if (step <= 0) return Math.ceil(value);
+  return Math.ceil(value / step) * step;
+}
+
+function percentile(values: number[], pct: number): number {
+  if (values.length === 0) return 0;
+  if (values.length === 1) return values[0]!;
+  const rank = (clamp(pct, 0, 100) / 100) * (values.length - 1);
+  const lower = Math.floor(rank);
+  const upper = Math.ceil(rank);
+  if (lower === upper) return values[lower]!;
+  const weight = rank - lower;
+  const lowerValue = values[lower]!;
+  const upperValue = values[upper]!;
+  return lowerValue + (upperValue - lowerValue) * weight;
+}
+
 function buildCostEventConditions(
   companyId?: string,
   companyIds?: string[] | null,
@@ -340,6 +377,242 @@ export function costService(db: Db) {
           goals.title,
         )
         .orderBy(desc(sql`coalesce(sum(${costEvents.costCents}), 0)::int`), desc(sql`max(${costEvents.occurredAt})`));
+    },
+
+    adminPricingPlan: async (
+      companyIds?: string[] | null,
+      range?: CostDateRange,
+      input?: AdminPricingPlanInput,
+    ) => {
+      const targetGrossMarginPct = clamp(input?.targetGrossMarginPct ?? 65, 30, 90);
+      const overageMarginPct = clamp(input?.overageMarginPct ?? 55, 20, 90);
+      const safetyOverheadPct = clamp(input?.safetyOverheadPct ?? 15, 0, 100);
+      const reservePct = clamp(input?.reservePct ?? 10, 0, 100);
+      const minimumPlanPriceCents = Math.max(0, Math.floor(input?.minimumPlanPriceCents ?? 7900));
+
+      const [summary, byCompany, byProvider, byModel] = await Promise.all([
+        (async () => {
+          const conditions = buildCostEventConditions(undefined, companyIds, range);
+          const [row] = await db
+            .select({
+              spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+              inputTokens: sql<number>`coalesce(sum(${costEvents.inputTokens}), 0)::int`,
+              outputTokens: sql<number>`coalesce(sum(${costEvents.outputTokens}), 0)::int`,
+              apiCallCount: sql<number>`count(*)::int`,
+              companyCount: sql<number>`count(distinct ${costEvents.companyId})::int`,
+              issueCount: sql<number>`count(distinct ${costEvents.issueId})::int`,
+            })
+            .from(costEvents)
+            .where(conditions.length > 0 ? and(...conditions) : undefined);
+          return row;
+        })(),
+        (async () => {
+          const conditions = buildCostEventConditions(undefined, companyIds, range);
+          return db
+            .select({
+              companyId: costEvents.companyId,
+              companyName: companies.name,
+              spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+              inputTokens: sql<number>`coalesce(sum(${costEvents.inputTokens}), 0)::int`,
+              outputTokens: sql<number>`coalesce(sum(${costEvents.outputTokens}), 0)::int`,
+              apiCallCount: sql<number>`count(*)::int`,
+              activeAgentCount: sql<number>`count(distinct ${costEvents.agentId})::int`,
+            })
+            .from(costEvents)
+            .innerJoin(companies, eq(costEvents.companyId, companies.id))
+            .where(conditions.length > 0 ? and(...conditions) : undefined)
+            .groupBy(costEvents.companyId, companies.name)
+            .orderBy(desc(sql`coalesce(sum(${costEvents.costCents}), 0)::int`));
+        })(),
+        (async () => {
+          const conditions = buildCostEventConditions(undefined, companyIds, range);
+          return db
+            .select({
+              provider: costEvents.provider,
+              spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+              apiCallCount: sql<number>`count(*)::int`,
+            })
+            .from(costEvents)
+            .where(conditions.length > 0 ? and(...conditions) : undefined)
+            .groupBy(costEvents.provider)
+            .orderBy(desc(sql`coalesce(sum(${costEvents.costCents}), 0)::int`));
+        })(),
+        (async () => {
+          const conditions = buildCostEventConditions(undefined, companyIds, range);
+          return db
+            .select({
+              provider: costEvents.provider,
+              model: costEvents.model,
+              spendCents: sql<number>`coalesce(sum(${costEvents.costCents}), 0)::int`,
+              apiCallCount: sql<number>`count(*)::int`,
+            })
+            .from(costEvents)
+            .where(conditions.length > 0 ? and(...conditions) : undefined)
+            .groupBy(costEvents.provider, costEvents.model)
+            .orderBy(desc(sql`coalesce(sum(${costEvents.costCents}), 0)::int`));
+        })(),
+      ]);
+
+      const spendCents = Number(summary.spendCents ?? 0);
+      const inputTokens = Number(summary.inputTokens ?? 0);
+      const outputTokens = Number(summary.outputTokens ?? 0);
+      const apiCallCount = Number(summary.apiCallCount ?? 0);
+      const issueCount = Number(summary.issueCount ?? 0);
+      const totalTokens = inputTokens + outputTokens;
+      const activeAgentCount = byCompany.reduce((total, row) => total + Number(row.activeAgentCount ?? 0), 0);
+
+      const companySpends = byCompany
+        .map((row) => Number(row.spendCents ?? 0))
+        .filter((value) => value > 0)
+        .sort((a, b) => a - b);
+
+      const spendP50Cents = percentile(companySpends, 50);
+      const spendP80Cents = percentile(companySpends, 80);
+      const spendP95Cents = percentile(companySpends, 95);
+      const averageCompanySpendCents =
+        companySpends.length > 0 ? companySpends.reduce((sum, value) => sum + value, 0) / companySpends.length : 0;
+
+      const averageCostPerApiCallCents = safeDivide(spendCents, apiCallCount);
+      const averageCostPer1kTokensCents = safeDivide(spendCents * 1000, totalTokens);
+      const averageCostPerActiveAgentCents = safeDivide(spendCents, activeAgentCount);
+      const averageCostPerTaskCents = safeDivide(spendCents, issueCount);
+
+      const topProvider = byProvider[0] ?? null;
+      const topModel = byModel[0] ?? null;
+      const topProviderSharePct = safeDivide(Number(topProvider?.spendCents ?? 0) * 100, spendCents);
+      const topModelSharePct = safeDivide(Number(topModel?.spendCents ?? 0) * 100, spendCents);
+      const overheadMultiplier = 1 + (safetyOverheadPct + reservePct) / 100;
+      const targetMarginRatio = targetGrossMarginPct / 100;
+      const overageMarginRatio = overageMarginPct / 100;
+
+      const starterBaselineCents = Math.max(spendP50Cents, averageCompanySpendCents * 0.7, 7500);
+      const growthBaselineCents = Math.max(spendP80Cents, starterBaselineCents * 2, 20000);
+      const scaleBaselineCents = Math.max(spendP95Cents, growthBaselineCents * 2, 60000);
+
+      function estimateInclusion(includeCents: number) {
+        return {
+          includedApiCallsEstimate:
+            averageCostPerApiCallCents > 0
+              ? Math.max(0, Math.floor(includeCents / averageCostPerApiCallCents))
+              : 0,
+          includedTokensEstimate:
+            averageCostPer1kTokensCents > 0
+              ? Math.max(0, Math.floor((includeCents / averageCostPer1kTokensCents) * 1000))
+              : 0,
+        };
+      }
+
+      function buildTier(name: "Starter" | "Growth" | "Scale", baselineCents: number, idealFor: string) {
+        const includedUsageCents = roundUp(Math.max(baselineCents * overheadMultiplier, 5000), 2500);
+        const floorPrice = includedUsageCents / Math.max(0.01, 1 - targetMarginRatio);
+        const monthlyPriceCents = Math.max(minimumPlanPriceCents, roundUp(floorPrice, 500));
+        const { includedApiCallsEstimate, includedTokensEstimate } = estimateInclusion(includedUsageCents);
+        const effectiveGrossMarginPct = monthlyPriceCents > 0
+          ? ((monthlyPriceCents - includedUsageCents) / monthlyPriceCents) * 100
+          : 0;
+        return {
+          tier: name,
+          idealFor,
+          includedUsageCents,
+          monthlyPriceCents,
+          includedApiCallsEstimate,
+          includedTokensEstimate,
+          effectiveGrossMarginPct: Number(effectiveGrossMarginPct.toFixed(2)),
+        };
+      }
+
+      const tiers = [
+        buildTier("Starter", starterBaselineCents, "Founders proving the first operating workflow."),
+        buildTier("Growth", growthBaselineCents, "Teams running multiple recurring agent loops."),
+        buildTier("Scale", scaleBaselineCents, "Organizations coordinating many agents and goals."),
+      ];
+
+      const overageApiCallCents = averageCostPerApiCallCents > 0
+        ? roundUp((averageCostPerApiCallCents * overheadMultiplier) / Math.max(0.01, 1 - overageMarginRatio), 1)
+        : 0;
+      const overagePer1kTokensCents = averageCostPer1kTokensCents > 0
+        ? roundUp((averageCostPer1kTokensCents * overheadMultiplier) / Math.max(0.01, 1 - overageMarginRatio), 1)
+        : 0;
+
+      const creditPacks = [9900, 24900, 49900].map((sellPriceCents) => {
+        const usageValueCents = Math.max(0, Math.floor(sellPriceCents * (1 - overageMarginRatio)));
+        const { includedApiCallsEstimate, includedTokensEstimate } = estimateInclusion(usageValueCents);
+        return {
+          sellPriceCents,
+          usageValueCents,
+          includedApiCallsEstimate,
+          includedTokensEstimate,
+        };
+      });
+
+      const guardrails: string[] = [];
+      if (topProvider && topProviderSharePct >= 70) {
+        guardrails.push(
+          `${topProvider.provider} is ${topProviderSharePct.toFixed(1)}% of spend. Keep provider-specific cushions in pricing.`,
+        );
+      }
+      if (topModel && topModelSharePct >= 45) {
+        guardrails.push(
+          `${topModel.model} is ${topModelSharePct.toFixed(1)}% of spend. Introduce model routing controls before lowering price.`,
+        );
+      }
+      if (averageCostPerApiCallCents > 0 && averageCostPerApiCallCents >= 150) {
+        guardrails.push("Average call cost is above $1.50. Require tighter run scopes or lower-cost default models.");
+      }
+      if (guardrails.length === 0) {
+        guardrails.push("Current spread is healthy. Keep a 20-25% usage reserve for prompt or model drift.");
+      }
+
+      return {
+        parameters: {
+          targetGrossMarginPct,
+          overageMarginPct,
+          safetyOverheadPct,
+          reservePct,
+          minimumPlanPriceCents,
+        },
+        observed: {
+          spendCents,
+          inputTokens,
+          outputTokens,
+          apiCallCount,
+          companyCount: Number(summary.companyCount ?? 0),
+          issueCount,
+          activeAgentCount,
+          averageCostPerApiCallCents: Number(averageCostPerApiCallCents.toFixed(2)),
+          averageCostPer1kTokensCents: Number(averageCostPer1kTokensCents.toFixed(2)),
+          averageCostPerActiveAgentCents: Number(averageCostPerActiveAgentCents.toFixed(2)),
+          averageCostPerTaskCents: Number(averageCostPerTaskCents.toFixed(2)),
+          companySpendPercentilesCents: {
+            p50: Math.round(spendP50Cents),
+            p80: Math.round(spendP80Cents),
+            p95: Math.round(spendP95Cents),
+            average: Math.round(averageCompanySpendCents),
+          },
+          topProvider: topProvider
+            ? {
+                provider: topProvider.provider,
+                sharePct: Number(topProviderSharePct.toFixed(2)),
+              }
+            : null,
+          topModel: topModel
+            ? {
+                provider: topModel.provider,
+                model: topModel.model,
+                sharePct: Number(topModelSharePct.toFixed(2)),
+              }
+            : null,
+        },
+        recommendations: {
+          tiers,
+          overage: {
+            perApiCallCents: overageApiCallCents,
+            per1kTokensCents: overagePer1kTokensCents,
+          },
+          creditPacks,
+          guardrails,
+        },
+      };
     },
   };
 }

@@ -121,6 +121,26 @@ export function costRoutes(db: Db) {
     res.json(rows);
   });
 
+  router.get("/admin/usage/pricing-plan", async (req, res) => {
+    const companyIds = resolveAdminUsageCompanyScope(req, res);
+    if (companyIds === null) return;
+    const range = parseDateRange(req.query);
+    const parseNumber = (value: unknown): number | undefined => {
+      if (value === undefined || value === null || value === "") return undefined;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+
+    const plan = await costs.adminPricingPlan(companyIds, range, {
+      targetGrossMarginPct: parseNumber(req.query.targetGrossMarginPct),
+      overageMarginPct: parseNumber(req.query.overageMarginPct),
+      safetyOverheadPct: parseNumber(req.query.safetyOverheadPct),
+      reservePct: parseNumber(req.query.reservePct),
+      minimumPlanPriceCents: parseNumber(req.query.minimumPlanPriceCents),
+    });
+    res.json(plan);
+  });
+
   router.patch("/companies/:companyId/budgets", validate(updateBudgetSchema), async (req, res) => {
     assertBoard(req);
     const companyId = req.params.companyId as string;

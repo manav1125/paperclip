@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Building2, Cpu, DollarSign, Layers3, ReceiptText } from "lucide-react";
+import { BarChart3, Building2, Cpu, DollarSign, Layers3, ReceiptText, SlidersHorizontal } from "lucide-react";
 import { adminUsageApi } from "@/api/adminUsage";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { queryKeys } from "@/lib/queryKeys";
@@ -8,6 +8,7 @@ import { formatCents, formatDateTime, formatTokens } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 
 type DatePreset = "mtd" | "7d" | "30d" | "ytd" | "all" | "custom";
 
@@ -37,6 +38,10 @@ function computeRange(preset: DatePreset): { from: string; to: string } {
     case "custom":
       return { from: "", to: "" };
   }
+}
+
+function formatPercent(value: number): string {
+  return `${value.toFixed(1)}%`;
 }
 
 function SectionTable({
@@ -99,6 +104,11 @@ export function InstanceUsageAnalytics() {
   const [preset, setPreset] = useState<DatePreset>("mtd");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  const [targetGrossMarginPct, setTargetGrossMarginPct] = useState("65");
+  const [overageMarginPct, setOverageMarginPct] = useState("55");
+  const [safetyOverheadPct, setSafetyOverheadPct] = useState("15");
+  const [reservePct, setReservePct] = useState("10");
+  const [minimumPlanPriceUsd, setMinimumPlanPriceUsd] = useState("79");
 
   useEffect(() => {
     setBreadcrumbs([
@@ -117,6 +127,27 @@ export function InstanceUsageAnalytics() {
     return computeRange(preset);
   }, [preset, customFrom, customTo]);
 
+  const pricingInput = useMemo(() => {
+    const parse = (value: string): number | undefined => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+    const minimumUsd = parse(minimumPlanPriceUsd);
+    return {
+      targetGrossMarginPct: parse(targetGrossMarginPct),
+      overageMarginPct: parse(overageMarginPct),
+      safetyOverheadPct: parse(safetyOverheadPct),
+      reservePct: parse(reservePct),
+      minimumPlanPriceCents: minimumUsd !== undefined ? Math.round(minimumUsd * 100) : undefined,
+    };
+  }, [
+    minimumPlanPriceUsd,
+    overageMarginPct,
+    reservePct,
+    safetyOverheadPct,
+    targetGrossMarginPct,
+  ]);
+
   const analyticsQuery = useQuery({
     queryKey: queryKeys.instance.usageAnalytics(from || undefined, to || undefined),
     queryFn: async () => {
@@ -129,6 +160,11 @@ export function InstanceUsageAnalytics() {
       ]);
       return { summary, byCompany, byProvider, byModel, byTask };
     },
+  });
+
+  const pricingPlanQuery = useQuery({
+    queryKey: queryKeys.instance.pricingPlan(from || undefined, to || undefined, pricingInput),
+    queryFn: () => adminUsageApi.pricingPlan(from || undefined, to || undefined, pricingInput),
   });
 
   const presetKeys: DatePreset[] = ["mtd", "7d", "30d", "ytd", "all", "custom"];
@@ -240,6 +276,229 @@ export function InstanceUsageAnalytics() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="space-y-2">
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base">Pricing Lab</CardTitle>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Turn live usage into recommended tiers. Adjust the knobs until your pricing hits the
+            gross margin you want while still leaving enough included usage for customers to run smoothly.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Target gross margin (%)</span>
+              <Input
+                type="number"
+                min={0}
+                max={95}
+                step={1}
+                value={targetGrossMarginPct}
+                onChange={(event) => setTargetGrossMarginPct(event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Overage margin (%)</span>
+              <Input
+                type="number"
+                min={0}
+                max={95}
+                step={1}
+                value={overageMarginPct}
+                onChange={(event) => setOverageMarginPct(event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Safety overhead (%)</span>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={safetyOverheadPct}
+                onChange={(event) => setSafetyOverheadPct(event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Reserve cushion (%)</span>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={reservePct}
+                onChange={(event) => setReservePct(event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Minimum plan price (USD)</span>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={minimumPlanPriceUsd}
+                onChange={(event) => setMinimumPlanPriceUsd(event.target.value)}
+              />
+            </label>
+          </div>
+
+          {pricingPlanQuery.isLoading ? (
+            <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+              Building pricing recommendations...
+            </div>
+          ) : null}
+
+          {pricingPlanQuery.error ? (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {pricingPlanQuery.error instanceof Error
+                ? pricingPlanQuery.error.message
+                : "Failed to calculate pricing recommendations."}
+            </div>
+          ) : null}
+
+          {pricingPlanQuery.data ? (
+            <>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <Card className="border-border/70">
+                  <CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Blended cost / LLM event</p>
+                    <p className="text-lg font-semibold tabular-nums">
+                      {formatCents(Math.round(pricingPlanQuery.data.observed.averageCostPerApiCallCents))}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Blended cost / 1K tokens</p>
+                    <p className="text-lg font-semibold tabular-nums">
+                      {formatCents(Math.round(pricingPlanQuery.data.observed.averageCostPer1kTokensCents))}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Avg cost / active agent</p>
+                    <p className="text-lg font-semibold tabular-nums">
+                      {formatCents(Math.round(pricingPlanQuery.data.observed.averageCostPerActiveAgentCents))}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Avg cost / task thread</p>
+                    <p className="text-lg font-semibold tabular-nums">
+                      {formatCents(Math.round(pricingPlanQuery.data.observed.averageCostPerTaskCents))}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <SectionTable
+                title="Recommended SaaS Tiers"
+                description="Use these as your default packaging: monthly fee + included usage + overage."
+                headers={[
+                  "Tier",
+                  "Monthly fee",
+                  "Included usage value",
+                  "Included LLM events",
+                  "Included tokens",
+                  "Gross margin",
+                ]}
+                rows={pricingPlanQuery.data.recommendations.tiers.map((tier) => [
+                  <div className="space-y-1" key={`${tier.tier}-name`}>
+                    <div className="font-medium">{tier.tier}</div>
+                    <div className="text-xs text-muted-foreground">{tier.idealFor}</div>
+                  </div>,
+                  <span className="tabular-nums font-medium" key={`${tier.tier}-price`}>
+                    {formatCents(tier.monthlyPriceCents)}
+                  </span>,
+                  <span className="tabular-nums" key={`${tier.tier}-credits`}>
+                    {formatCents(tier.includedUsageCents)}
+                  </span>,
+                  <span className="tabular-nums" key={`${tier.tier}-calls`}>
+                    {tier.includedApiCallsEstimate.toLocaleString()}
+                  </span>,
+                  <span className="tabular-nums" key={`${tier.tier}-tokens`}>
+                    {formatTokens(tier.includedTokensEstimate)}
+                  </span>,
+                  <span className="tabular-nums" key={`${tier.tier}-margin`}>
+                    {formatPercent(tier.effectiveGrossMarginPct)}
+                  </span>,
+                ])}
+              />
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <SectionTable
+                  title="Overage Recommendation"
+                  description="Charge overages at this rate to protect margin when customers exceed included usage."
+                  headers={["Metric", "Suggested overage"]}
+                  rows={[
+                    [
+                      <span key="overage-call-label">Per LLM event</span>,
+                      <span className="tabular-nums font-medium" key="overage-call-value">
+                        {formatCents(pricingPlanQuery.data.recommendations.overage.perApiCallCents)}
+                      </span>,
+                    ],
+                    [
+                      <span key="overage-token-label">Per 1K tokens</span>,
+                      <span className="tabular-nums font-medium" key="overage-token-value">
+                        {formatCents(pricingPlanQuery.data.recommendations.overage.per1kTokensCents)}
+                      </span>,
+                    ],
+                  ]}
+                />
+
+                <SectionTable
+                  title="Top-up Pack Suggestions"
+                  description="Optional prepaid packs to keep workloads running without plan upgrades."
+                  headers={["Sell price", "Usage value", "Estimated events", "Estimated tokens"]}
+                  rows={pricingPlanQuery.data.recommendations.creditPacks.map((pack) => [
+                    <span className="tabular-nums font-medium" key={`${pack.sellPriceCents}-sell`}>
+                      {formatCents(pack.sellPriceCents)}
+                    </span>,
+                    <span className="tabular-nums" key={`${pack.sellPriceCents}-value`}>
+                      {formatCents(pack.usageValueCents)}
+                    </span>,
+                    <span className="tabular-nums" key={`${pack.sellPriceCents}-calls`}>
+                      {pack.includedApiCallsEstimate.toLocaleString()}
+                    </span>,
+                    <span className="tabular-nums" key={`${pack.sellPriceCents}-tokens`}>
+                      {formatTokens(pack.includedTokensEstimate)}
+                    </span>,
+                  ])}
+                />
+              </div>
+
+              <Card className="border-border/70">
+                <CardHeader className="space-y-1 pb-2">
+                  <CardTitle className="text-sm">Pricing Guardrails</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm text-muted-foreground">
+                  {pricingPlanQuery.data.recommendations.guardrails.map((guardrail) => (
+                    <p key={guardrail}>- {guardrail}</p>
+                  ))}
+                  {pricingPlanQuery.data.observed.topProvider ? (
+                    <p>
+                      Top provider concentration: {pricingPlanQuery.data.observed.topProvider.provider} at{" "}
+                      {formatPercent(pricingPlanQuery.data.observed.topProvider.sharePct)}.
+                    </p>
+                  ) : null}
+                  {pricingPlanQuery.data.observed.topModel ? (
+                    <p>
+                      Top model concentration: {pricingPlanQuery.data.observed.topModel.model} at{" "}
+                      {formatPercent(pricingPlanQuery.data.observed.topModel.sharePct)}.
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <SectionTable
         title="By Organization"
