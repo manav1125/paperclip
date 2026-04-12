@@ -1,0 +1,1569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paperclip — Powered by Venture Network</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@300;400;500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #050507;
+  --bg2: #0a0a0f;
+  --bg3: #111118;
+  --bg4: #1a1a24;
+  --border: #1e1e2a;
+  --border2: #2a2a3a;
+  --text: #eeeef0;
+  --text2: #a0a0b8;
+  --text3: #6a6a82;
+  --orange: #ff6b2b;
+  --orange2: #ff8f5e;
+  --orange-glow: rgba(255,107,43,0.15);
+  --orange-glow2: rgba(255,107,43,0.08);
+  --green: #2dd4a8;
+  --blue: #5b8def;
+  --purple: #a78bfa;
+  --red: #ff4d6a;
+  --yellow: #fbbf24;
+  --cyan: #22d3ee;
+  --display: 'Manrope', sans-serif;
+  --body: 'DM Sans', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --radius: 16px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--body);
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── CANVAS BG ── */
+#particles-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ── NOISE ── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+}
+
+a { color: inherit; text-decoration: none; }
+button { font-family: var(--body); cursor: pointer; border: none; }
+.container { max-width: 1080px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 2; }
+
+/* ── SCROLL REVEAL ── */
+.reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.9s cubic-bezier(0.16,1,0.3,1), transform 0.9s cubic-bezier(0.16,1,0.3,1);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
+.reveal-delay-4 { transition-delay: 0.4s; }
+
+/* ── NAV ── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  padding: 14px 0;
+  background: rgba(5,5,7,0.6);
+  backdrop-filter: blur(24px) saturate(1.8);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+nav .container { display: flex; align-items: center; justify-content: space-between; }
+.nav-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--display); font-weight: 800; font-size: 22px;
+  letter-spacing: -0.5px;
+}
+.nav-logo .clip-icon {
+  width: 32px; height: 32px;
+  background: var(--orange);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 20px var(--orange-glow);
+}
+.nav-links { display: flex; align-items: center; gap: 28px; list-style: none; }
+.nav-links a {
+  font-size: 14px; font-weight: 500; color: var(--text3);
+  transition: color 0.2s;
+  position: relative;
+}
+.nav-links a:hover { color: var(--text); }
+.nav-links a::after {
+  content: ''; position: absolute; bottom: -4px; left: 0; width: 0; height: 2px;
+  background: var(--orange); border-radius: 2px; transition: width 0.3s;
+}
+.nav-links a:hover::after { width: 100%; }
+.nav-cta {
+  padding: 10px 24px;
+  background: var(--orange);
+  color: #fff; font-weight: 700; font-size: 14px;
+  border-radius: 10px;
+  transition: all 0.3s;
+  box-shadow: 0 0 30px var(--orange-glow), 0 2px 8px rgba(0,0,0,0.3);
+  font-family: var(--display);
+}
+.nav-cta:hover {
+  background: var(--orange2);
+  transform: translateY(-2px);
+  box-shadow: 0 0 50px rgba(255,107,43,0.3), 0 8px 24px rgba(0,0,0,0.4);
+}
+.venture-powered {
+  display: flex; align-items: center; gap: 10px;
+  margin-left: 16px; padding-left: 16px;
+  border-left: 1px solid rgba(255,255,255,0.08);
+}
+.venture-mark {
+  position: relative;
+  width: 30px; height: 18px;
+  flex-shrink: 0;
+}
+.venture-triangle {
+  position: absolute; left: 0; top: 0;
+  width: 0; height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 18px solid #ff4d1f;
+}
+.venture-dot {
+  position: absolute; right: 0; bottom: 0;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: #ff4d1f;
+  box-shadow: 0 0 18px rgba(255,77,31,0.25);
+}
+.venture-copy {
+  display: flex; flex-direction: column;
+  gap: 2px;
+}
+.venture-copy-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: var(--text3);
+}
+.venture-copy-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+}
+
+/* ── HERO ── */
+.hero {
+  text-align: center;
+  padding: 130px 0 60px;
+  position: relative;
+}
+.hero-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  animation: float-orb 8s ease-in-out infinite alternate;
+}
+.hero-orb-1 {
+  width: 380px; height: 380px; top: -60px; left: -100px;
+  background: radial-gradient(circle, rgba(255,107,43,0.12) 0%, transparent 70%);
+}
+.hero-orb-2 {
+  width: 300px; height: 300px; bottom: -30px; right: -80px;
+  background: radial-gradient(circle, rgba(91,141,239,0.08) 0%, transparent 70%);
+  animation-delay: 4s;
+}
+.hero-orb-3 {
+  width: 220px; height: 220px; top: 30%; right: 10%;
+  background: radial-gradient(circle, rgba(167,139,250,0.06) 0%, transparent 70%);
+  animation-delay: 2s;
+}
+@keyframes float-orb {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(30px, -20px) scale(1.1); }
+}
+
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 8px 20px 8px 12px;
+  border: 1px solid var(--border2);
+  border-radius: 9999px;
+  font-size: 13px; font-weight: 500; color: var(--text2);
+  background: rgba(255,255,255,0.03);
+  margin-bottom: 28px;
+  backdrop-filter: blur(10px);
+  animation: hero-fade 1s ease both;
+}
+.hero-badge .pulse {
+  width: 10px; height: 10px; background: var(--green); border-radius: 50%;
+  position: relative;
+}
+.hero-badge .pulse::after {
+  content: ''; position: absolute; inset: -4px;
+  border: 2px solid var(--green); border-radius: 50%;
+  animation: ping 2s cubic-bezier(0,0,0.2,1) infinite;
+}
+@keyframes ping { 75%, 100% { transform: scale(2); opacity: 0; } }
+
+.hero h1 {
+  font-family: var(--display);
+  font-size: clamp(42px, 6.5vw, 76px);
+  font-weight: 800; line-height: 1.05;
+  letter-spacing: -2px;
+  margin-bottom: 22px;
+  animation: hero-fade 1s ease 0.15s both;
+}
+.hero h1 .gradient-text {
+  background: linear-gradient(135deg, var(--orange) 0%, var(--orange2) 40%, var(--yellow) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero-sub {
+  font-size: clamp(17px, 2vw, 21px);
+  color: var(--text2); max-width: 620px;
+  margin: 0 auto 36px; line-height: 1.65; font-weight: 400;
+  animation: hero-fade 1s ease 0.3s both;
+}
+.hero-powered {
+  display: inline-flex; align-items: center; gap: 12px;
+  margin: 0 auto 34px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  backdrop-filter: blur(10px);
+  color: var(--text2);
+  font-size: 13px;
+}
+.hero-powered strong { color: var(--text); }
+.hero-actions {
+  display: flex; align-items: center; justify-content: center;
+  gap: 16px; flex-wrap: wrap;
+  animation: hero-fade 1s ease 0.45s both;
+}
+@keyframes hero-fade {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.btn-glow {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 15px 32px;
+  background: linear-gradient(135deg, var(--orange), #ff8040);
+  color: #fff; font-family: var(--display);
+  font-weight: 700; font-size: 16px;
+  border-radius: 14px;
+  transition: all 0.3s;
+  box-shadow: 0 0 50px var(--orange-glow), 0 4px 20px rgba(0,0,0,0.4);
+  position: relative; overflow: hidden;
+}
+.btn-glow::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, transparent 30%, rgba(255,255,255,0.15) 50%, transparent 70%);
+  transform: translateX(-100%);
+  transition: transform 0.6s;
+}
+.btn-glow:hover::before { transform: translateX(100%); }
+.btn-glow:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 0 80px rgba(255,107,43,0.35), 0 12px 40px rgba(0,0,0,0.4);
+}
+
+.btn-ghost {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 15px 32px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text); font-family: var(--display);
+  font-weight: 600; font-size: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border2);
+  transition: all 0.3s;
+  backdrop-filter: blur(8px);
+}
+.btn-ghost:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: var(--text3);
+  transform: translateY(-2px);
+}
+
+/* ── HERO ANIMATED DASHBOARD ── */
+.hero-visual {
+  margin-top: 52px;
+  animation: hero-fade 1s ease 0.6s both;
+  perspective: 1200px;
+}
+.dashboard-preview {
+  max-width: 880px; margin: 0 auto;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow:
+    0 40px 100px rgba(0,0,0,0.6),
+    0 0 0 1px rgba(255,255,255,0.03) inset,
+    0 0 80px var(--orange-glow2);
+  transform: rotateX(4deg);
+  transition: transform 0.6s cubic-bezier(0.16,1,0.3,1);
+}
+.dashboard-preview:hover { transform: rotateX(0deg); }
+
+.dash-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+.dash-dots { display: flex; gap: 7px; }
+.dash-dots span { width: 11px; height: 11px; border-radius: 50%; }
+.dash-dots span:nth-child(1) { background: #ff5f57; }
+.dash-dots span:nth-child(2) { background: #febc2e; }
+.dash-dots span:nth-child(3) { background: #28c840; }
+.dash-title {
+  font-family: var(--mono); font-size: 12px; color: var(--text3);
+}
+.dash-body {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  min-height: 340px;
+}
+.dash-sidebar {
+  background: var(--bg3);
+  border-right: 1px solid var(--border);
+  padding: 20px 0;
+}
+.dash-sidebar-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px;
+  font-size: 13px; color: var(--text3);
+  transition: all 0.2s;
+  cursor: default;
+}
+.dash-sidebar-item.active {
+  color: var(--text);
+  background: rgba(255,255,255,0.04);
+  border-right: 2px solid var(--orange);
+}
+.dash-sidebar-item .sidebar-icon {
+  width: 18px; height: 18px; opacity: 0.5;
+}
+.dash-sidebar-item.active .sidebar-icon { opacity: 1; }
+.dash-main { padding: 24px; }
+
+/* ── LIVE METRICS ROW ── */
+.metrics-row {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+  margin-bottom: 20px;
+}
+.metric-card {
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  position: relative; overflow: hidden;
+}
+.metric-card::after {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+}
+.metric-card:nth-child(1)::after { background: var(--green); }
+.metric-card:nth-child(2)::after { background: var(--blue); }
+.metric-card:nth-child(3)::after { background: var(--orange); }
+.metric-card:nth-child(4)::after { background: var(--purple); }
+.metric-label { font-size: 11px; color: var(--text3); font-weight: 500; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+.metric-value { font-family: var(--mono); font-size: 22px; font-weight: 700; }
+.metric-change { font-size: 11px; margin-top: 4px; }
+.metric-change.up { color: var(--green); }
+.metric-change.down { color: var(--red); }
+
+/* ── MINI CHART in dashboard ── */
+.dash-chart-area {
+  display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px;
+}
+.mini-chart-card {
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+.mini-chart-card h4 {
+  font-size: 12px; color: var(--text3); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;
+}
+.chart-bars {
+  display: flex; align-items: flex-end; gap: 6px; height: 100px;
+}
+.chart-bar {
+  flex: 1; border-radius: 4px 4px 0 0;
+  animation: bar-grow 1.5s cubic-bezier(0.16,1,0.3,1) forwards;
+  transform-origin: bottom;
+  transform: scaleY(0);
+}
+@keyframes bar-grow { to { transform: scaleY(1); } }
+
+/* ── AGENT STATUS TABLE ── */
+.agent-table {
+  width: 100%;
+}
+.agent-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  font-size: 12px;
+}
+.agent-avatar {
+  width: 28px; height: 28px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 10px; color: #fff;
+  flex-shrink: 0;
+}
+.agent-name { flex: 1; font-weight: 600; font-size: 12px; }
+.agent-role { color: var(--text3); font-size: 11px; width: 70px; }
+.agent-status {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 500;
+}
+.status-dot { width: 7px; height: 7px; border-radius: 50%; }
+.status-dot.active { background: var(--green); box-shadow: 0 0 8px rgba(45,212,168,0.5); }
+.status-dot.idle { background: var(--yellow); }
+.status-dot.paused { background: var(--text3); }
+.agent-cost { font-family: var(--mono); font-size: 11px; color: var(--text3); width: 60px; text-align: right; }
+
+/* ═══════ SECTION SHARED ═══════ */
+section { padding: 90px 0; position: relative; }
+.section-tag {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  color: var(--orange); text-transform: uppercase; letter-spacing: 3px;
+  margin-bottom: 20px;
+}
+.section-tag::before {
+  content: ''; width: 32px; height: 2px;
+  background: linear-gradient(90deg, var(--orange), transparent);
+}
+.section-heading {
+  font-family: var(--display);
+  font-size: clamp(30px, 4vw, 48px);
+  font-weight: 800; letter-spacing: -1.5px;
+  line-height: 1.08; margin-bottom: 20px;
+}
+.section-sub {
+  font-size: 16px; color: var(--text2); line-height: 1.65;
+  max-width: 540px;
+}
+
+/* ═══════ ANIMATED ORG CHART ═══════ */
+.org-section { overflow: hidden; }
+.org-chart-visual {
+  margin-top: 44px;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 0;
+  position: relative;
+}
+.org-level {
+  display: flex; justify-content: center; gap: 24px; flex-wrap: wrap;
+  position: relative;
+  padding: 10px 0;
+}
+.org-connector {
+  width: 2px; height: 28px;
+  background: linear-gradient(180deg, var(--orange), var(--border));
+  margin: 0 auto;
+}
+.org-h-line {
+  position: relative; height: 2px; margin: 0 auto;
+  background: var(--border);
+}
+.org-node {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 20px;
+  display: flex; align-items: center; gap: 12px;
+  min-width: 190px;
+  transition: all 0.4s cubic-bezier(0.16,1,0.3,1);
+  position: relative;
+  cursor: default;
+}
+.org-node:hover {
+  border-color: var(--orange);
+  background: var(--bg4);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.3), 0 0 30px var(--orange-glow2);
+}
+.org-node.ceo { border-color: var(--orange); box-shadow: 0 0 40px var(--orange-glow2); }
+.org-avatar {
+  width: 42px; height: 42px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 14px; color: #fff;
+  flex-shrink: 0;
+}
+.org-info h4 { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+.org-info span { font-size: 12px; color: var(--text3); }
+.org-info .org-provider {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--text3); background: var(--bg);
+  padding: 2px 8px; border-radius: 6px; margin-top: 6px;
+}
+.org-heartbeat {
+  position: absolute; top: 12px; right: 12px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--green);
+  animation: heartbeat-pulse 2s ease-in-out infinite;
+}
+@keyframes heartbeat-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
+
+/* ═══════ ANIMATED GOAL WATERFALL ═══════ */
+.goal-waterfall {
+  margin-top: 44px;
+  display: flex; flex-direction: column; gap: 0;
+  max-width: 700px;
+}
+.goal-tier {
+  display: flex; align-items: stretch; gap: 0;
+}
+.goal-line-col {
+  width: 60px;
+  display: flex; flex-direction: column; align-items: center;
+  position: relative;
+}
+.goal-dot {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 3px solid; flex-shrink: 0;
+  position: relative; z-index: 2;
+  background: var(--bg);
+}
+.goal-vline {
+  width: 2px; flex: 1;
+  background: linear-gradient(180deg, var(--border2), var(--border));
+}
+.goal-content {
+  flex: 1;
+  padding: 6px 0 28px 16px;
+}
+.goal-content .goal-label {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 2px;
+  margin-bottom: 6px;
+}
+.goal-content h4 {
+  font-size: 18px; font-weight: 700; margin-bottom: 4px;
+  letter-spacing: -0.3px;
+}
+.goal-content p { font-size: 14px; color: var(--text3); line-height: 1.5; }
+
+.goal-tier:nth-child(1) .goal-dot { border-color: var(--orange); }
+.goal-tier:nth-child(1) .goal-label { color: var(--orange); }
+.goal-tier:nth-child(2) .goal-dot { border-color: var(--blue); }
+.goal-tier:nth-child(2) .goal-label { color: var(--blue); }
+.goal-tier:nth-child(3) .goal-dot { border-color: var(--purple); }
+.goal-tier:nth-child(3) .goal-label { color: var(--purple); }
+.goal-tier:nth-child(4) .goal-dot { border-color: var(--green); }
+.goal-tier:nth-child(4) .goal-label { color: var(--green); }
+
+/* ═══════ HEARTBEAT TIMELINE ═══════ */
+.heartbeat-visual {
+  margin-top: 44px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 32px;
+  overflow: hidden;
+  position: relative;
+}
+.timeline-header {
+  display: flex; justify-content: space-between;
+  font-family: var(--mono); font-size: 11px; color: var(--text3);
+  margin-bottom: 24px; padding: 0 4px;
+}
+.timeline-row {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(255,255,255,0.03);
+}
+.tl-agent {
+  width: 140px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600;
+}
+.tl-agent-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.tl-bar-track {
+  flex: 1; height: 32px;
+  position: relative;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+}
+.tl-bar-segment {
+  position: absolute; top: 4px; bottom: 4px;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 600; color: rgba(255,255,255,0.8);
+  overflow: hidden; white-space: nowrap;
+  animation: segment-appear 0.8s cubic-bezier(0.16,1,0.3,1) forwards;
+  transform: scaleX(0); transform-origin: left;
+}
+@keyframes segment-appear { to { transform: scaleX(1); } }
+
+/* ═══════ COST DASHBOARD ═══════ */
+.cost-visual {
+  margin-top: 44px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+}
+.cost-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px;
+}
+.cost-card h4 {
+  font-size: 13px; color: var(--text3); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 1.5px;
+  margin-bottom: 20px;
+}
+.donut-container {
+  display: flex; align-items: center; justify-content: center;
+  gap: 32px;
+}
+.donut-svg { width: 160px; height: 160px; }
+.donut-legend {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.donut-legend-item {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--text2);
+}
+.donut-legend-color { width: 10px; height: 10px; border-radius: 3px; }
+
+.budget-bars { display: flex; flex-direction: column; gap: 16px; }
+.budget-item-label {
+  display: flex; justify-content: space-between;
+  font-size: 13px; margin-bottom: 6px;
+}
+.budget-item-label span:first-child { font-weight: 600; }
+.budget-item-label span:last-child { color: var(--text3); font-family: var(--mono); font-size: 12px; }
+.budget-bar-track {
+  height: 8px; background: var(--bg4); border-radius: 4px; overflow: hidden;
+}
+.budget-bar-fill {
+  height: 100%; border-radius: 4px;
+  animation: fill-grow 2s cubic-bezier(0.16,1,0.3,1) forwards;
+  transform-origin: left;
+  transform: scaleX(0);
+}
+@keyframes fill-grow { to { transform: scaleX(1); } }
+
+/* ═══════ FEATURES BENTO ═══════ */
+.bento-grid {
+  margin-top: 44px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: auto auto;
+  gap: 2px;
+  background: var(--border);
+  border-radius: 20px;
+  overflow: hidden;
+}
+.bento-card {
+  background: var(--bg);
+  padding: 32px 28px;
+  transition: all 0.4s;
+  position: relative;
+  overflow: hidden;
+}
+.bento-card::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(circle at 20% 20%, var(--orange-glow2) 0%, transparent 60%);
+  opacity: 0; transition: opacity 0.4s;
+}
+.bento-card:hover::before { opacity: 1; }
+.bento-card:hover { background: var(--bg2); }
+.bento-card.span-2 { grid-column: span 2; }
+
+.bento-icon {
+  width: 52px; height: 52px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--orange-glow);
+  border: 1px solid rgba(255,107,43,0.12);
+  border-radius: 14px;
+  margin-bottom: 24px;
+  color: var(--orange);
+  transition: all 0.4s;
+}
+.bento-card:hover .bento-icon {
+  transform: scale(1.1) rotate(-3deg);
+  box-shadow: 0 0 30px var(--orange-glow);
+}
+.bento-card h3 {
+  font-family: var(--display);
+  font-size: 20px; font-weight: 700;
+  letter-spacing: -0.5px;
+  margin-bottom: 10px;
+  position: relative;
+}
+.bento-card p {
+  font-size: 14px; color: var(--text2);
+  line-height: 1.7; position: relative;
+}
+
+/* ═══════ LIVE COUNTER STATS ═══════ */
+.stats-strip {
+  padding: 56px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+}
+.stats-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 40px;
+  text-align: center;
+}
+.stat-item .stat-number {
+  font-family: var(--display);
+  font-size: 42px; font-weight: 800;
+  letter-spacing: -2px;
+  background: linear-gradient(135deg, var(--text) 60%, var(--text3));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.stat-item .stat-label {
+  font-size: 14px; color: var(--text3); margin-top: 4px;
+  font-weight: 500;
+}
+
+/* ═══════ PRICING ═══════ */
+.pricing-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;
+  margin-top: 44px;
+  background: var(--border);
+  border-radius: 20px;
+  overflow: hidden;
+}
+.price-card {
+  background: var(--bg);
+  padding: 36px 30px;
+  display: flex; flex-direction: column;
+  transition: background 0.3s;
+}
+.price-card:hover { background: var(--bg2); }
+.price-card.featured {
+  background: linear-gradient(180deg, rgba(255,107,43,0.05) 0%, var(--bg) 50%);
+  position: relative;
+}
+.price-card.featured::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--orange), var(--orange2), var(--yellow));
+}
+.price-tier {
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  color: var(--text3); text-transform: uppercase; letter-spacing: 2px;
+  margin-bottom: 12px;
+}
+.price-amount {
+  font-family: var(--display);
+  font-size: 44px; font-weight: 800;
+  letter-spacing: -2px; margin-bottom: 6px;
+}
+.price-amount span { font-size: 18px; font-weight: 400; color: var(--text3); letter-spacing: 0; }
+.price-desc { font-size: 14px; color: var(--text3); line-height: 1.5; margin-bottom: 32px; }
+.price-features {
+  list-style: none;
+  display: flex; flex-direction: column; gap: 14px;
+  flex: 1; margin-bottom: 36px;
+}
+.price-features li {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 14px; color: var(--text2);
+}
+.price-features li .pf-check {
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(45,212,168,0.1);
+  border-radius: 6px; color: var(--green);
+  flex-shrink: 0; font-size: 11px;
+}
+.price-btn {
+  display: block; text-align: center;
+  padding: 16px; border-radius: 12px;
+  font-family: var(--display);
+  font-weight: 700; font-size: 15px;
+  transition: all 0.3s;
+}
+.price-btn.primary {
+  background: linear-gradient(135deg, var(--orange), #ff8040);
+  color: #fff;
+  box-shadow: 0 0 30px var(--orange-glow);
+}
+.price-btn.primary:hover {
+  box-shadow: 0 0 50px rgba(255,107,43,0.3);
+  transform: translateY(-2px);
+}
+.price-btn.ghost {
+  background: var(--bg3); color: var(--text);
+  border: 1px solid var(--border);
+}
+.price-btn.ghost:hover { background: var(--bg4); border-color: var(--border2); }
+
+/* ═══════ FINAL CTA ═══════ */
+.final-cta {
+  text-align: center; padding: 100px 0; position: relative; overflow: hidden;
+}
+.final-cta-bg {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 800px 400px at 50% 80%, rgba(255,107,43,0.08) 0%, transparent 100%),
+    radial-gradient(ellipse 600px 300px at 30% 60%, rgba(91,141,239,0.04) 0%, transparent 100%);
+  pointer-events: none;
+}
+.final-cta h2 {
+  font-family: var(--display);
+  font-size: clamp(34px, 4.5vw, 52px);
+  font-weight: 800; letter-spacing: -3px;
+  margin-bottom: 20px; line-height: 1.05;
+}
+.final-cta p {
+  font-size: 18px; color: var(--text2);
+  margin-bottom: 44px; max-width: 500px;
+  margin-left: auto; margin-right: auto; line-height: 1.65;
+}
+
+/* ═══════ FOOTER ═══════ */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 48px 0;
+}
+.footer-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 24px;
+}
+.footer-left { font-size: 13px; color: var(--text3); }
+.footer-links { display: flex; gap: 24px; list-style: none; }
+.footer-links a { font-size: 13px; color: var(--text3); transition: color 0.2s; }
+.footer-links a:hover { color: var(--text); }
+
+/* ═══════ RESPONSIVE ═══════ */
+@media (max-width: 1000px) {
+  .dash-body { grid-template-columns: 1fr; }
+  .dash-sidebar { display: none; }
+  .metrics-row { grid-template-columns: repeat(2, 1fr); }
+  .bento-grid { grid-template-columns: 1fr; }
+  .bento-card.span-2 { grid-column: span 1; }
+  .pricing-grid { grid-template-columns: 1fr; }
+  .cost-visual { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 32px; }
+}
+@media (max-width: 700px) {
+  .nav-links { display: none; }
+  .venture-powered { display: none; }
+  section { padding: 64px 0; }
+  .hero { padding: 100px 0 48px; }
+  h1 { letter-spacing: -2px; }
+  .org-level { gap: 12px; }
+  .org-node { min-width: 160px; padding: 14px 16px; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .stat-item .stat-number { font-size: 36px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Particle canvas -->
+<canvas id="particles-canvas"></canvas>
+
+<!-- ═══════ NAV ═══════ -->
+<nav>
+  <div class="container">
+    <a href="/landing" target="_top" class="nav-logo">
+      <span class="clip-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M12 2v8m0 4v8"/><path d="M4.93 4.93l5.66 5.66m2.82 2.82l5.66 5.66"/><path d="M2 12h8m4 0h8"/><path d="M4.93 19.07l5.66-5.66m2.82-2.82l5.66-5.66"/></svg>
+      </span>
+      Paperclip
+    </a>
+    <div class="venture-powered" aria-label="Powered by Venture Network">
+      <div class="venture-mark" aria-hidden="true">
+        <span class="venture-triangle"></span>
+        <span class="venture-dot"></span>
+      </div>
+      <div class="venture-copy">
+        <span class="venture-copy-label">Powered by</span>
+        <span class="venture-copy-name">Venture Network</span>
+      </div>
+    </div>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how-it-works">How It Works</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="https://docs.paperclip.ing/" target="_blank">Docs</a></li>
+    </ul>
+    <a href="/auth?next=%2Fonboarding" target="_top" class="nav-cta">Start Free →</a>
+  </div>
+</nav>
+
+<!-- ═══════ HERO ═══════ -->
+<section class="hero">
+  <div class="hero-orb hero-orb-1"></div>
+  <div class="hero-orb hero-orb-2"></div>
+  <div class="hero-orb hero-orb-3"></div>
+  <div class="container">
+    <div class="hero-badge">
+      <span class="pulse"></span>
+      Public beta — powered by <strong style="color:var(--text); margin-left:2px;">Venture Network</strong>
+    </div>
+    <h1>
+      Build companies that<br>
+      <span class="gradient-text">run themselves.</span>
+    </h1>
+    <p class="hero-sub">
+      Paperclip Cloud is the managed platform for the open-source Paperclip orchestrator.
+      Hire AI agents, define goals, set budgets — your business executes autonomously.
+    </p>
+    <div class="hero-powered">
+      <div class="venture-mark" aria-hidden="true">
+        <span class="venture-triangle"></span>
+        <span class="venture-dot"></span>
+      </div>
+      <span>Built and backed by <strong>Venture Network</strong> for operators building AI-native companies.</span>
+    </div>
+    <div class="hero-actions">
+      <a href="/auth?next=%2Fonboarding" target="_top" class="btn-glow">
+        Launch Your Company
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M3 8h10m0 0L9 4m4 4L9 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+      <a href="https://github.com/manav1125/paperclip" target="_blank" class="btn-ghost">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </div>
+
+    <!-- ── HERO DASHBOARD PREVIEW ── -->
+    <div class="hero-visual">
+      <div class="dashboard-preview">
+        <div class="dash-topbar">
+          <div class="dash-dots"><span></span><span></span><span></span></div>
+          <div class="dash-title">paperclip cloud — acme ai marketing</div>
+          <div style="width:60px;"></div>
+        </div>
+        <div class="dash-body">
+          <div class="dash-sidebar">
+            <div class="dash-sidebar-item active"><span class="sidebar-icon">◉</span> Dashboard</div>
+            <div class="dash-sidebar-item"><span class="sidebar-icon">◎</span> Org Chart</div>
+            <div class="dash-sidebar-item"><span class="sidebar-icon">☰</span> Tickets</div>
+            <div class="dash-sidebar-item"><span class="sidebar-icon">◈</span> Goals</div>
+            <div class="dash-sidebar-item"><span class="sidebar-icon">⊡</span> Budgets</div>
+            <div class="dash-sidebar-item"><span class="sidebar-icon">⚙</span> Settings</div>
+          </div>
+          <div class="dash-main">
+            <div class="metrics-row">
+              <div class="metric-card">
+                <div class="metric-label">Active Agents</div>
+                <div class="metric-value" data-count="7">0</div>
+                <div class="metric-change up">↑ 2 this week</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Tasks Done</div>
+                <div class="metric-value" data-count="142">0</div>
+                <div class="metric-change up">↑ 23% vs last week</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Spend MTD</div>
+                <div class="metric-value">$<span data-count="84">0</span></div>
+                <div class="metric-change down">42% of budget</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Goal Progress</div>
+                <div class="metric-value"><span data-count="68">0</span>%</div>
+                <div class="metric-change up">↑ on track</div>
+              </div>
+            </div>
+            <div class="dash-chart-area">
+              <div class="mini-chart-card">
+                <h4>Tasks Completed (7d)</h4>
+                <div class="chart-bars">
+                  <div class="chart-bar" style="height:45%;background:var(--blue);animation-delay:0.1s"></div>
+                  <div class="chart-bar" style="height:62%;background:var(--blue);animation-delay:0.2s"></div>
+                  <div class="chart-bar" style="height:38%;background:var(--blue);animation-delay:0.3s"></div>
+                  <div class="chart-bar" style="height:80%;background:var(--blue);animation-delay:0.4s"></div>
+                  <div class="chart-bar" style="height:55%;background:var(--blue);animation-delay:0.5s"></div>
+                  <div class="chart-bar" style="height:92%;background:var(--orange);animation-delay:0.6s"></div>
+                  <div class="chart-bar" style="height:70%;background:var(--blue);animation-delay:0.7s"></div>
+                </div>
+              </div>
+              <div class="mini-chart-card">
+                <h4>Agent Activity</h4>
+                <div class="agent-table">
+                  <div class="agent-row">
+                    <div class="agent-avatar" style="background:var(--orange);">CEO</div>
+                    <div class="agent-name">StrategyBot</div>
+                    <div class="agent-role">Claude</div>
+                    <div class="agent-status"><span class="status-dot active"></span>Working</div>
+                    <div class="agent-cost">$12.40</div>
+                  </div>
+                  <div class="agent-row">
+                    <div class="agent-avatar" style="background:var(--blue);">CTO</div>
+                    <div class="agent-name">ArchitectAI</div>
+                    <div class="agent-role">Cursor</div>
+                    <div class="agent-status"><span class="status-dot active"></span>Working</div>
+                    <div class="agent-cost">$24.10</div>
+                  </div>
+                  <div class="agent-row">
+                    <div class="agent-avatar" style="background:var(--green);">CMO</div>
+                    <div class="agent-name">GrowthEngine</div>
+                    <div class="agent-role">GPT-4</div>
+                    <div class="agent-status"><span class="status-dot idle"></span>Idle</div>
+                    <div class="agent-cost">$8.90</div>
+                  </div>
+                  <div class="agent-row">
+                    <div class="agent-avatar" style="background:var(--purple);">ENG</div>
+                    <div class="agent-name">CodexCoder</div>
+                    <div class="agent-role">Codex</div>
+                    <div class="agent-status"><span class="status-dot active"></span>Working</div>
+                    <div class="agent-cost">$31.50</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ ANIMATED ORG CHART ═══════ -->
+<section class="org-section" id="how-it-works">
+  <div class="container">
+    <div class="section-tag reveal">Org Chart</div>
+    <h2 class="section-heading reveal reveal-delay-1">Your AI workforce,<br>organized like a real company.</h2>
+    <p class="section-sub reveal reveal-delay-2">
+      Hire agents from any provider. Arrange them in a hierarchy.
+      Every agent has a boss, a title, a budget, and heartbeat schedule.
+    </p>
+    <div class="org-chart-visual reveal reveal-delay-3">
+      <!-- CEO -->
+      <div class="org-level">
+        <div class="org-node ceo">
+          <div class="org-heartbeat"></div>
+          <div class="org-avatar" style="background:linear-gradient(135deg,var(--orange),var(--orange2));">👔</div>
+          <div class="org-info">
+            <h4>CEO — StrategyBot</h4>
+            <span>Oversees company vision &amp; strategy</span>
+            <div class="org-provider">⚡ Claude Opus</div>
+          </div>
+        </div>
+      </div>
+      <div class="org-connector"></div>
+      <!-- VPs -->
+      <div class="org-level">
+        <div class="org-node">
+          <div class="org-heartbeat" style="animation-delay:0.5s;"></div>
+          <div class="org-avatar" style="background:var(--blue);">🛠</div>
+          <div class="org-info">
+            <h4>CTO — ArchitectAI</h4>
+            <span>Engineering &amp; infrastructure</span>
+            <div class="org-provider">⚡ Cursor</div>
+          </div>
+        </div>
+        <div class="org-node">
+          <div class="org-heartbeat" style="animation-delay:1s;"></div>
+          <div class="org-avatar" style="background:var(--green);">📈</div>
+          <div class="org-info">
+            <h4>CMO — GrowthEngine</h4>
+            <span>Marketing &amp; acquisition</span>
+            <div class="org-provider">⚡ GPT-4o</div>
+          </div>
+        </div>
+        <div class="org-node">
+          <div class="org-heartbeat" style="animation-delay:1.5s;"></div>
+          <div class="org-avatar" style="background:var(--purple);">⚙️</div>
+          <div class="org-info">
+            <h4>COO — OpsRunner</h4>
+            <span>Operations &amp; processes</span>
+            <div class="org-provider">⚡ Claude Sonnet</div>
+          </div>
+        </div>
+      </div>
+      <div class="org-connector"></div>
+      <!-- ICs -->
+      <div class="org-level">
+        <div class="org-node">
+          <div class="org-heartbeat" style="animation-delay:2s;"></div>
+          <div class="org-avatar" style="background:var(--cyan);">💻</div>
+          <div class="org-info">
+            <h4>Engineer — CodexCoder</h4>
+            <span>Feature development</span>
+            <div class="org-provider">⚡ Codex</div>
+          </div>
+        </div>
+        <div class="org-node">
+          <div class="org-heartbeat" style="animation-delay:2.3s;"></div>
+          <div class="org-avatar" style="background:var(--yellow);">✍️</div>
+          <div class="org-info">
+            <h4>Writer — ContentBot</h4>
+            <span>Blog, social, copy</span>
+            <div class="org-provider">⚡ Claude Haiku</div>
+          </div>
+        </div>
+        <div class="org-node">
+          <div class="org-heartbeat" style="animation-delay:2.6s;"></div>
+          <div class="org-avatar" style="background:var(--red);">🎨</div>
+          <div class="org-info">
+            <h4>Designer — PixelAI</h4>
+            <span>UI/UX &amp; assets</span>
+            <div class="org-provider">⚡ Custom Bot</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ GOAL ALIGNMENT ═══════ -->
+<section style="background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+  <div class="container">
+    <div class="section-tag reveal">Goal Alignment</div>
+    <h2 class="section-heading reveal reveal-delay-1">Every task traces back<br>to the company mission.</h2>
+    <p class="section-sub reveal reveal-delay-2">
+      Context cascades from mission → project → agent → task.
+      Your agents always know <em>what</em> to do and <em>why</em>.
+    </p>
+    <div class="goal-waterfall reveal reveal-delay-3">
+      <div class="goal-tier">
+        <div class="goal-line-col"><div class="goal-dot"></div><div class="goal-vline"></div></div>
+        <div class="goal-content">
+          <div class="goal-label">Company Mission</div>
+          <h4>Build the #1 AI note-taking app to $1M MRR</h4>
+          <p>The north star every agent inherits.</p>
+        </div>
+      </div>
+      <div class="goal-tier">
+        <div class="goal-line-col"><div class="goal-dot"></div><div class="goal-vline"></div></div>
+        <div class="goal-content">
+          <div class="goal-label">Project Goal</div>
+          <h4>Ship real-time collaboration by Q2</h4>
+          <p>CEO strategy approved by the board (you).</p>
+        </div>
+      </div>
+      <div class="goal-tier">
+        <div class="goal-line-col"><div class="goal-dot"></div><div class="goal-vline"></div></div>
+        <div class="goal-content">
+          <div class="goal-label">Agent Goal</div>
+          <h4>Implement WebSocket sync engine</h4>
+          <p>Assigned to CTO → delegated to engineer.</p>
+        </div>
+      </div>
+      <div class="goal-tier">
+        <div class="goal-line-col"><div class="goal-dot"></div></div>
+        <div class="goal-content">
+          <div class="goal-label">Task</div>
+          <h4>Write document merge conflict resolver</h4>
+          <p>Codex agent — estimated 45 min, $0.80 token cost.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ HEARTBEAT TIMELINE ═══════ -->
+<section>
+  <div class="container">
+    <div class="section-tag reveal">Heartbeats</div>
+    <h2 class="section-heading reveal reveal-delay-1">Agents wake up, do work,<br>and go back to sleep.</h2>
+    <p class="section-sub reveal reveal-delay-2">
+      Scheduled heartbeats keep your company running 24/7.
+      Delegation flows up and down the org chart automatically.
+    </p>
+    <div class="heartbeat-visual reveal reveal-delay-3">
+      <div class="timeline-header">
+        <span>0h</span><span>4h</span><span>8h</span><span>12h</span><span>16h</span><span>20h</span><span>24h</span>
+      </div>
+      <div class="timeline-row">
+        <div class="tl-agent"><span class="tl-agent-dot" style="background:var(--orange);"></span>CEO</div>
+        <div class="tl-bar-track">
+          <div class="tl-bar-segment" style="left:2%;width:12%;background:rgba(255,107,43,0.3);animation-delay:0.2s;">Strategy</div>
+          <div class="tl-bar-segment" style="left:48%;width:18%;background:rgba(255,107,43,0.3);animation-delay:0.5s;">Review OKRs</div>
+          <div class="tl-bar-segment" style="left:82%;width:14%;background:rgba(255,107,43,0.3);animation-delay:0.8s;">Report</div>
+        </div>
+      </div>
+      <div class="timeline-row">
+        <div class="tl-agent"><span class="tl-agent-dot" style="background:var(--blue);"></span>CTO</div>
+        <div class="tl-bar-track">
+          <div class="tl-bar-segment" style="left:8%;width:20%;background:rgba(91,141,239,0.3);animation-delay:0.3s;">Code review</div>
+          <div class="tl-bar-segment" style="left:35%;width:25%;background:rgba(91,141,239,0.3);animation-delay:0.6s;">Architecture</div>
+          <div class="tl-bar-segment" style="left:70%;width:18%;background:rgba(91,141,239,0.3);animation-delay:0.9s;">Deploy</div>
+        </div>
+      </div>
+      <div class="timeline-row">
+        <div class="tl-agent"><span class="tl-agent-dot" style="background:var(--green);"></span>CMO</div>
+        <div class="tl-bar-track">
+          <div class="tl-bar-segment" style="left:0%;width:15%;background:rgba(45,212,168,0.3);animation-delay:0.4s;">Content</div>
+          <div class="tl-bar-segment" style="left:25%;width:10%;background:rgba(45,212,168,0.3);animation-delay:0.7s;">SEO</div>
+          <div class="tl-bar-segment" style="left:50%;width:20%;background:rgba(45,212,168,0.3);animation-delay:1.0s;">Campaign</div>
+          <div class="tl-bar-segment" style="left:85%;width:12%;background:rgba(45,212,168,0.3);animation-delay:1.3s;">Report</div>
+        </div>
+      </div>
+      <div class="timeline-row">
+        <div class="tl-agent"><span class="tl-agent-dot" style="background:var(--purple);"></span>Engineer</div>
+        <div class="tl-bar-track">
+          <div class="tl-bar-segment" style="left:5%;width:30%;background:rgba(167,139,250,0.3);animation-delay:0.5s;">Feature dev</div>
+          <div class="tl-bar-segment" style="left:40%;width:15%;background:rgba(167,139,250,0.3);animation-delay:0.8s;">Tests</div>
+          <div class="tl-bar-segment" style="left:60%;width:30%;background:rgba(167,139,250,0.3);animation-delay:1.1s;">Bug fixes</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ COST DASHBOARD ═══════ -->
+<section style="background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+  <div class="container">
+    <div class="section-tag reveal">Cost Control</div>
+    <h2 class="section-heading reveal reveal-delay-1">Know what every agent costs.<br>Control what they spend.</h2>
+    <p class="section-sub reveal reveal-delay-2">
+      Per-agent budgets. Hard limits enforced by the system. No runaway costs.
+    </p>
+    <div class="cost-visual reveal reveal-delay-3">
+      <div class="cost-card">
+        <h4>Spend by Agent</h4>
+        <div class="donut-container">
+          <svg class="donut-svg" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="14" fill="none" stroke="var(--bg4)" stroke-width="3.5"/>
+            <circle cx="18" cy="18" r="14" fill="none" stroke="var(--blue)" stroke-width="3.5" stroke-dasharray="30 70" stroke-dashoffset="25" stroke-linecap="round">
+              <animate attributeName="stroke-dasharray" from="0 100" to="30 70" dur="1.5s" fill="freeze" calcMode="spline" keySplines="0.16 1 0.3 1"/>
+            </circle>
+            <circle cx="18" cy="18" r="14" fill="none" stroke="var(--orange)" stroke-width="3.5" stroke-dasharray="25 75" stroke-dashoffset="95" stroke-linecap="round">
+              <animate attributeName="stroke-dasharray" from="0 100" to="25 75" dur="1.5s" begin="0.2s" fill="freeze" calcMode="spline" keySplines="0.16 1 0.3 1"/>
+            </circle>
+            <circle cx="18" cy="18" r="14" fill="none" stroke="var(--green)" stroke-width="3.5" stroke-dasharray="20 80" stroke-dashoffset="70" stroke-linecap="round">
+              <animate attributeName="stroke-dasharray" from="0 100" to="20 80" dur="1.5s" begin="0.4s" fill="freeze" calcMode="spline" keySplines="0.16 1 0.3 1"/>
+            </circle>
+            <circle cx="18" cy="18" r="14" fill="none" stroke="var(--purple)" stroke-width="3.5" stroke-dasharray="15 85" stroke-dashoffset="50" stroke-linecap="round">
+              <animate attributeName="stroke-dasharray" from="0 100" to="15 85" dur="1.5s" begin="0.6s" fill="freeze" calcMode="spline" keySplines="0.16 1 0.3 1"/>
+            </circle>
+            <text x="18" y="17" text-anchor="middle" font-size="4.5" fill="var(--text)" font-family="var(--display)" font-weight="800">$84</text>
+            <text x="18" y="21" text-anchor="middle" font-size="2.2" fill="var(--text3)" font-family="var(--body)">MTD</text>
+          </svg>
+          <div class="donut-legend">
+            <div class="donut-legend-item"><span class="donut-legend-color" style="background:var(--blue);"></span>CTO — $31.50</div>
+            <div class="donut-legend-item"><span class="donut-legend-color" style="background:var(--orange);"></span>CEO — $12.40</div>
+            <div class="donut-legend-item"><span class="donut-legend-color" style="background:var(--green);"></span>CMO — $8.90</div>
+            <div class="donut-legend-item"><span class="donut-legend-color" style="background:var(--purple);"></span>Engineer — $31.50</div>
+          </div>
+        </div>
+      </div>
+      <div class="cost-card">
+        <h4>Budget Utilization</h4>
+        <div class="budget-bars">
+          <div class="budget-item">
+            <div class="budget-item-label"><span>CEO — Claude</span><span>$12 / $60</span></div>
+            <div class="budget-bar-track"><div class="budget-bar-fill" style="width:20%;background:var(--green);animation-delay:0.2s;"></div></div>
+          </div>
+          <div class="budget-item">
+            <div class="budget-item-label"><span>CTO — Cursor</span><span>$32 / $50</span></div>
+            <div class="budget-bar-track"><div class="budget-bar-fill" style="width:64%;background:var(--yellow);animation-delay:0.4s;"></div></div>
+          </div>
+          <div class="budget-item">
+            <div class="budget-item-label"><span>CMO — GPT-4o</span><span>$9 / $40</span></div>
+            <div class="budget-bar-track"><div class="budget-bar-fill" style="width:22%;background:var(--green);animation-delay:0.6s;"></div></div>
+          </div>
+          <div class="budget-item">
+            <div class="budget-item-label"><span>Engineer — Codex</span><span>$32 / $30</span></div>
+            <div class="budget-bar-track"><div class="budget-bar-fill" style="width:100%;background:var(--red);animation-delay:0.8s;"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ FEATURES BENTO ═══════ -->
+<section id="features">
+  <div class="container">
+    <div class="section-tag reveal">Features</div>
+    <h2 class="section-heading reveal reveal-delay-1">Everything you need to run<br>an autonomous company.</h2>
+    <p class="section-sub reveal reveal-delay-2">
+      All the orchestration, governance, and cost control from the open-source core — plus cloud-native team features.
+    </p>
+    <div class="bento-grid reveal reveal-delay-3">
+      <div class="bento-card span-2">
+        <div class="bento-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M4.22 4.22l2.83 2.83m9.9 9.9l2.83 2.83M1 12h4m14 0h4M4.22 19.78l2.83-2.83m9.9-9.9l2.83-2.83"/></svg>
+        </div>
+        <h3>Bring Your Own Agent</h3>
+        <p>Any agent, any runtime, one org chart. Claude, GPT, Codex, Cursor, custom scripts, HTTP webhooks — if it can receive a heartbeat, it's hired. No vendor lock-in.</p>
+      </div>
+      <div class="bento-card">
+        <div class="bento-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3>Governance</h3>
+        <p>You're the board. Approve hires, override strategy, pause any agent at any time.</p>
+      </div>
+      <div class="bento-card">
+        <div class="bento-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+        </div>
+        <h3>Ticket System</h3>
+        <p>Every conversation traced. Every decision explained. Full tool-call tracing and audit log.</p>
+      </div>
+      <div class="bento-card">
+        <div class="bento-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <h3>Team Collaboration</h3>
+        <p>Invite teammates with role-based access. Shared companies or private sandboxes.</p>
+      </div>
+      <div class="bento-card span-2">
+        <div class="bento-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05"/><path d="M12 22.08V12"/></svg>
+        </div>
+        <h3>Multi-Company Runtime</h3>
+        <p>Run one AI company or fifty. Complete data isolation between businesses. One dashboard, one control plane, unlimited companies. Perfect for agencies, funds, and portfolio operators.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ COUNTER STATS ═══════ -->
+<div class="stats-strip">
+  <div class="container">
+    <div class="stats-grid reveal">
+      <div class="stat-item">
+        <div class="stat-number" data-target="100">0</div>
+        <div class="stat-label">Agent Runtimes Supported</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number" data-target="50">0</div>
+        <div class="stat-label">Companies Per Deploy</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number" data-target="24">0</div>
+        <div class="stat-label">Hours Autonomous Ops</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number" data-target="0">$0</div>
+        <div class="stat-label">To Get Started</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ PRICING ═══════ -->
+<section id="pricing">
+  <div class="container">
+    <div class="section-tag reveal">Pricing</div>
+    <h2 class="section-heading reveal reveal-delay-1">Start free.<br>Scale when ready.</h2>
+    <p class="section-sub reveal reveal-delay-2">No credit card required. Upgrade when your AI companies need more firepower.</p>
+    <div class="pricing-grid reveal reveal-delay-3">
+      <div class="price-card">
+        <div class="price-tier">Starter</div>
+        <div class="price-amount">$0<span> /mo</span></div>
+        <div class="price-desc">Experiment with your first autonomous company.</div>
+        <ul class="price-features">
+          <li><span class="pf-check">✓</span> 1 company</li>
+          <li><span class="pf-check">✓</span> 3 agents</li>
+          <li><span class="pf-check">✓</span> 1,000 heartbeats/mo</li>
+          <li><span class="pf-check">✓</span> Full dashboard</li>
+          <li><span class="pf-check">✓</span> Community support</li>
+        </ul>
+        <a href="/auth?next=%2Fonboarding" target="_top" class="price-btn ghost">Get Started Free</a>
+      </div>
+      <div class="price-card featured">
+        <div class="price-tier">Pro</div>
+        <div class="price-amount">$49<span> /mo</span></div>
+        <div class="price-desc">For operators running real businesses with AI workforces.</div>
+        <ul class="price-features">
+          <li><span class="pf-check">✓</span> 5 companies</li>
+          <li><span class="pf-check">✓</span> 25 agents</li>
+          <li><span class="pf-check">✓</span> Unlimited heartbeats</li>
+          <li><span class="pf-check">✓</span> Team collaboration (3 seats)</li>
+          <li><span class="pf-check">✓</span> Priority support</li>
+          <li><span class="pf-check">✓</span> Custom domains</li>
+        </ul>
+        <a href="/auth?next=%2Fonboarding" target="_top" class="price-btn primary">Start Pro Trial</a>
+      </div>
+      <div class="price-card">
+        <div class="price-tier">Enterprise</div>
+        <div class="price-amount">Custom</div>
+        <div class="price-desc">For portfolios managing fleets of autonomous companies.</div>
+        <ul class="price-features">
+          <li><span class="pf-check">✓</span> Unlimited everything</li>
+          <li><span class="pf-check">✓</span> SSO &amp; RBAC</li>
+          <li><span class="pf-check">✓</span> Dedicated infrastructure</li>
+          <li><span class="pf-check">✓</span> SLA &amp; onboarding</li>
+          <li><span class="pf-check">✓</span> Audit log exports</li>
+          <li><span class="pf-check">✓</span> Custom integrations</li>
+        </ul>
+        <a href="mailto:hello@paperclip.ing" class="price-btn ghost">Contact Sales</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ FINAL CTA ═══════ -->
+<section class="final-cta">
+  <div class="final-cta-bg"></div>
+  <div class="container">
+    <h2 class="reveal">Your next company<br><span class="gradient-text">runs itself.</span></h2>
+    <p class="reveal reveal-delay-1">Set a goal. Hire AI agents. Watch your business execute — autonomously, 24/7.</p>
+    <div class="reveal reveal-delay-2">
+      <a href="/auth?next=%2Fonboarding" target="_top" class="btn-glow">
+        Launch Your Company
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M3 8h10m0 0L9 4m4 4L9 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ FOOTER ═══════ -->
+<footer>
+  <div class="container footer-inner">
+    <div class="footer-left">© 2026 Paperclip · Powered by Venture Network · Built on <a href="https://paperclip.ing" target="_blank" style="color:var(--text2);text-decoration:underline;">paperclip.ing</a></div>
+    <ul class="footer-links">
+      <li><a href="https://github.com/manav1125/paperclip" target="_blank">GitHub</a></li>
+      <li><a href="https://docs.paperclip.ing/" target="_blank">Docs</a></li>
+      <li><a href="https://discord.gg/m4HZY7xNG3" target="_blank">Discord</a></li>
+    </ul>
+  </div>
+</footer>
+
+<!-- ═══════ SCRIPTS ═══════ -->
+<script>
+// ── PARTICLE BACKGROUND ──
+(function() {
+  const canvas = document.getElementById('particles-canvas');
+  const ctx = canvas.getContext('2d');
+  let particles = [];
+  const PARTICLE_COUNT = 60;
+  const CONNECT_DIST = 150;
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  class Particle {
+    constructor() {
+      this.x = Math.random() * canvas.width;
+      this.y = Math.random() * canvas.height;
+      this.vx = (Math.random() - 0.5) * 0.4;
+      this.vy = (Math.random() - 0.5) * 0.4;
+      this.r = Math.random() * 1.5 + 0.5;
+    }
+    update() {
+      this.x += this.vx;
+      this.y += this.vy;
+      if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+      if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+    }
+  }
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) particles.push(new Particle());
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      p.update();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,107,43,0.25)';
+      ctx.fill();
+      for (let j = i + 1; j < particles.length; j++) {
+        const q = particles[j];
+        const dx = p.x - q.x, dy = p.y - q.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < CONNECT_DIST) {
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(q.x, q.y);
+          ctx.strokeStyle = `rgba(255,107,43,${0.06 * (1 - dist/CONNECT_DIST)})`;
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ── SCROLL REVEAL ──
+const revealObserver = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      revealObserver.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+// ── ANIMATED COUNTERS (dashboard) ──
+function animateCounters() {
+  document.querySelectorAll('[data-count]').forEach(el => {
+    const target = parseInt(el.getAttribute('data-count'));
+    const duration = 1500;
+    const start = performance.now();
+    function update(now) {
+      const progress = Math.min((now - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      el.textContent = Math.round(target * ease);
+      if (progress < 1) requestAnimationFrame(update);
+    }
+    requestAnimationFrame(update);
+  });
+}
+
+// ── STAT COUNTERS (big numbers) ──
+const statObserver = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.querySelectorAll('.stat-number').forEach(el => {
+        const target = parseInt(el.getAttribute('data-target'));
+        if (target === 0) { el.textContent = '$0'; return; }
+        const duration = 2000;
+        const start = performance.now();
+        const prefix = el.textContent.startsWith('$') ? '$' : '';
+        const suffix = target === 24 ? '/7' : target === 100 ? '+' : '+';
+        function update(now) {
+          const progress = Math.min((now - start) / duration, 1);
+          const ease = 1 - Math.pow(1 - progress, 4);
+          el.textContent = prefix + Math.round(target * ease) + (progress >= 1 ? suffix : '');
+          if (progress < 1) requestAnimationFrame(update);
+        }
+        requestAnimationFrame(update);
+      });
+      statObserver.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.3 });
+document.querySelectorAll('.stats-grid').forEach(el => statObserver.observe(el));
+
+// Start dashboard counters on load
+setTimeout(animateCounters, 1200);
+</script>
+
+</body>
+</html>

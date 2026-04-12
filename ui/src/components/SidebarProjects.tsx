@@ -173,7 +173,7 @@ export function SidebarProjects() {
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="group">
+      <div className="group" data-guide-id="projects-section">
         <div className="flex items-center px-3 py-1.5">
           <CollapsibleTrigger className="flex items-center gap-1 flex-1 min-w-0">
             <ChevronRight

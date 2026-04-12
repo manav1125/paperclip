@@ -6,6 +6,7 @@ import {
   companyPortabilityPreviewSchema,
   createCompanySchema,
   updateCompanySchema,
+  PERMISSION_KEYS,
 } from "@paperclipai/shared";
 import { forbidden } from "../errors.js";
 import { validate } from "../middleware/validate.js";
@@ -108,11 +109,29 @@ export function companyRoutes(db: Db) {
 
   router.post("/", validate(createCompanySchema), async (req, res) => {
     assertBoard(req);
-    if (!(req.actor.source === "local_implicit" || req.actor.isInstanceAdmin)) {
-      throw forbidden("Instance admin required");
+    if (
+      !(
+        req.actor.source === "local_implicit" ||
+        req.actor.isInstanceAdmin ||
+        (req.actor.source === "session" && req.actor.userId)
+      )
+    ) {
+      const existingCompanies = await svc.list();
+      if (existingCompanies.length === 0 && req.actor.userId) {
+        await access.promoteInstanceAdmin(req.actor.userId);
+      } else {
+        throw forbidden("Instance admin required");
+      }
     }
     const company = await svc.create(req.body);
     await access.ensureMembership(company.id, "user", req.actor.userId ?? "local-board", "owner", "active");
+    await access.setPrincipalGrants(
+      company.id,
+      "user",
+      req.actor.userId ?? "local-board",
+      PERMISSION_KEYS.map((permissionKey) => ({ permissionKey, scope: null })),
+      req.actor.userId ?? "local-board",
+    );
     await logActivity(db, {
       companyId: company.id,
       actorType: "user",

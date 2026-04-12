@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Moon, Settings, Sun } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { BookOpen, LogOut, Moon, Settings, Sun } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "@/lib/router";
 import { CompanyRail } from "./CompanyRail";
 import { Sidebar } from "./Sidebar";
@@ -20,9 +20,11 @@ import { usePanel } from "../context/PanelContext";
 import { useCompany } from "../context/CompanyContext";
 import { useSidebar } from "../context/SidebarContext";
 import { useTheme } from "../context/ThemeContext";
+import { useProductGuide } from "../context/ProductGuideContext";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useCompanyPageMemory } from "../hooks/useCompanyPageMemory";
 import { healthApi } from "../api/health";
+import { authApi } from "../api/auth";
 import { shouldSyncCompanySelectionFromRoute } from "../lib/company-selection";
 import { queryKeys } from "../lib/queryKeys";
 import { cn } from "../lib/utils";
@@ -77,8 +79,10 @@ export function Layout() {
     setSelectedCompanyId,
   } = useCompany();
   const { theme, toggleTheme } = useTheme();
+  const { startWorkspaceGuide, isGuideOpen } = useProductGuide();
   const { companyPrefix } = useParams<{ companyPrefix: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const location = useLocation();
   const isInstanceSettingsRoute = location.pathname.startsWith("/instance/");
   const onboardingTriggered = useRef(false);
@@ -86,6 +90,7 @@ export function Layout() {
   const [mobileNavVisible, setMobileNavVisible] = useState(true);
   const [instanceSettingsTarget, setInstanceSettingsTarget] = useState<string>(() => readRememberedInstanceSettingsPath());
   const nextTheme = theme === "dark" ? "light" : "dark";
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const matchedCompany = useMemo(() => {
     if (!companyPrefix) return null;
     const requestedPrefix = companyPrefix.toUpperCase();
@@ -271,6 +276,18 @@ export function Layout() {
     }
   }, [location.hash, location.pathname, location.search]);
 
+  const handleSignOut = useCallback(async () => {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+    try {
+      await authApi.signOut();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
+      navigate("/landing", { replace: true });
+    } finally {
+      setIsSigningOut(false);
+    }
+  }, [isSigningOut, navigate, queryClient]);
+
   return (
     <div
       className={cn(
@@ -308,6 +325,16 @@ export function Layout() {
             </div>
             <div className="border-t border-r border-border px-3 py-2 bg-background">
               <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" className="text-foreground/80 shrink-0" asChild>
+                  <Link
+                    to="/landing"
+                    onClick={() => {
+                      if (isMobile) setSidebarOpen(false);
+                    }}
+                  >
+                    View landing
+                  </Link>
+                </Button>
                 <a
                   href="https://docs.paperclip.ing/"
                   target="_blank"
@@ -328,6 +355,18 @@ export function Layout() {
                   >
                     <Settings className="h-4 w-4" />
                   </Link>
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground shrink-0"
+                  onClick={handleSignOut}
+                  aria-label="Sign out"
+                  title="Sign out"
+                  disabled={isSigningOut}
+                >
+                  <LogOut className="h-4 w-4" />
                 </Button>
                 <Button
                   type="button"
@@ -358,6 +397,9 @@ export function Layout() {
             </div>
             <div className="border-t border-r border-border px-3 py-2">
               <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" className="text-foreground/80 shrink-0" asChild>
+                  <Link to="/landing">View landing</Link>
+                </Button>
                 <a
                   href="https://docs.paperclip.ing/"
                   target="_blank"
@@ -378,6 +420,18 @@ export function Layout() {
                   >
                     <Settings className="h-4 w-4" />
                   </Link>
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground shrink-0"
+                  onClick={handleSignOut}
+                  aria-label="Sign out"
+                  title="Sign out"
+                  disabled={isSigningOut}
+                >
+                  <LogOut className="h-4 w-4" />
                 </Button>
                 <Button
                   type="button"
@@ -425,6 +479,23 @@ export function Layout() {
           </div>
         </div>
       </div>
+      {selectedCompanyId && !isGuideOpen && (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className={cn(
+            "fixed z-30 shadow-lg",
+            isMobile
+              ? "bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4"
+              : "bottom-5 right-5",
+          )}
+          onClick={startWorkspaceGuide}
+        >
+          <BookOpen className="mr-1.5 h-3.5 w-3.5" />
+          Guide Me
+        </Button>
+      )}
       {isMobile && <MobileBottomNav visible={mobileNavVisible} />}
       <CommandPalette />
       <NewIssueDialog />

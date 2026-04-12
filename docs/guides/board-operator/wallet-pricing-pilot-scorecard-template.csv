@@ -1,0 +1,6 @@
+date,company_id,company_name,opening_wallet_balance_usd,top_up_usd,llm_debit_usd,closing_wallet_balance_usd,agent_runs,input_tokens,output_tokens,total_tokens,avg_cost_per_run_usd,top_provider,top_model,top_task_or_issue,notes
+2026-04-01,COMPANY_ID,Gentle Play,500.00,100.00,82.31,517.69,42,185000,126000,311000,1.96,anthropic,claude-sonnet-4-6,BRI-12,"Baseline day"
+2026-04-02,COMPANY_ID,Gentle Play,517.69,0.00,74.12,443.57,38,170500,111300,281800,1.95,anthropic,claude-sonnet-4-6,BRI-13,"Prompt cleanup started"
+2026-04-03,COMPANY_ID,Gentle Play,443.57,0.00,68.45,375.12,35,152000,104100,256100,1.96,anthropic,claude-sonnet-4-6,BRI-14,"More scoped issues"
+2026-04-04,COMPANY_ID,Gentle Play,375.12,150.00,121.90,403.22,63,301200,229900,531100,1.94,anthropic,claude-sonnet-4-6,BRI-21,"Stress day"
+2026-04-05,COMPANY_ID,Gentle Play,403.22,0.00,88.54,314.68,44,196400,139500,335900,2.01,anthropic,claude-sonnet-4-6,BRI-23,"Finalize tier assumptions"

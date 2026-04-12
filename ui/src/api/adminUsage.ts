@@ -59,10 +59,161 @@ export interface AdminUsageByTask {
   latestOccurredAt: string | null;
 }
 
+export interface AdminPricingPlan {
+  parameters: {
+    targetGrossMarginPct: number;
+    minimumCogsMarkupPct: number;
+    fixedPlatformFeeCents: number;
+    overageMarginPct: number;
+    safetyOverheadPct: number;
+    reservePct: number;
+    minimumPlanPriceCents: number;
+  };
+  observed: {
+    spendCents: number;
+    inputTokens: number;
+    outputTokens: number;
+    apiCallCount: number;
+    companyCount: number;
+    issueCount: number;
+    activeAgentCount: number;
+    averageCostPerApiCallCents: number;
+    averageCostPer1kTokensCents: number;
+    averageCostPerActiveAgentCents: number;
+    averageCostPerTaskCents: number;
+    companySpendPercentilesCents: {
+      p50: number;
+      p80: number;
+      p95: number;
+      average: number;
+    };
+    topProvider: {
+      provider: string;
+      sharePct: number;
+    } | null;
+    topModel: {
+      provider: string;
+      model: string;
+      sharePct: number;
+    } | null;
+  };
+  recommendations: {
+    tiers: Array<{
+      tier: "Starter" | "Growth" | "Scale";
+      idealFor: string;
+      includedUsageCents: number;
+      monthlyPriceCents: number;
+      includedApiCallsEstimate: number;
+      includedTokensEstimate: number;
+      effectiveGrossMarginPct: number;
+      llmMarkupPct: number;
+    }>;
+    overage: {
+      perApiCallCents: number;
+      per1kTokensCents: number;
+    };
+    creditPacks: Array<{
+      sellPriceCents: number;
+      usageValueCents: number;
+      includedApiCallsEstimate: number;
+      includedTokensEstimate: number;
+    }>;
+    guardrails: string[];
+  };
+}
+
+export interface AdminWalletOverviewRow {
+  companyId: string;
+  companyName: string;
+  issuePrefix: string;
+  walletId: string | null;
+  walletMissing: boolean;
+  balanceCents: number | null;
+  currency: string | null;
+  hardLimitEnforced: boolean | null;
+  minRunBalanceCents: number | null;
+  lowBalanceThresholdCents: number | null;
+  lifetimeCreditsCents: number | null;
+  lifetimeDebitsCents: number | null;
+  updatedAt: string | null;
+}
+
+export interface CompanyWallet {
+  id: string;
+  companyId: string;
+  currency: string;
+  balanceCents: number;
+  lifetimeCreditsCents: number;
+  lifetimeDebitsCents: number;
+  hardLimitEnforced: boolean;
+  minRunBalanceCents: number;
+  lowBalanceThresholdCents: number;
+  lastDebitedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompanyWalletLedgerEntry {
+  id: string;
+  companyId: string;
+  walletId: string;
+  entryType: string;
+  source: string;
+  sourceRef: string | null;
+  amountCents: number;
+  balanceAfterCents: number;
+  note: string | null;
+  costEventId: string | null;
+  runId: string | null;
+  metadataJson: Record<string, unknown>;
+  createdAt: string;
+}
+
 function dateParams(from?: string, to?: string): string {
   const params = new URLSearchParams();
   if (from) params.set("from", from);
   if (to) params.set("to", to);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
+function pricingPlanParams(
+  from?: string,
+  to?: string,
+  input?: {
+    targetGrossMarginPct?: number;
+    minimumCogsMarkupPct?: number;
+    fixedPlatformFeeCents?: number;
+    overageMarginPct?: number;
+    safetyOverheadPct?: number;
+    reservePct?: number;
+    minimumPlanPriceCents?: number;
+  },
+): string {
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  if (input?.targetGrossMarginPct !== undefined) {
+    params.set("targetGrossMarginPct", String(input.targetGrossMarginPct));
+  }
+  if (input?.overageMarginPct !== undefined) {
+    params.set("overageMarginPct", String(input.overageMarginPct));
+  }
+  if (input?.minimumCogsMarkupPct !== undefined) {
+    params.set("minimumCogsMarkupPct", String(input.minimumCogsMarkupPct));
+  }
+  if (input?.fixedPlatformFeeCents !== undefined) {
+    params.set("fixedPlatformFeeCents", String(input.fixedPlatformFeeCents));
+  }
+  if (input?.safetyOverheadPct !== undefined) {
+    params.set("safetyOverheadPct", String(input.safetyOverheadPct));
+  }
+  if (input?.reservePct !== undefined) {
+    params.set("reservePct", String(input.reservePct));
+  }
+  if (input?.minimumPlanPriceCents !== undefined) {
+    params.set("minimumPlanPriceCents", String(input.minimumPlanPriceCents));
+  }
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 }
@@ -78,4 +229,45 @@ export const adminUsageApi = {
     api.get<AdminUsageByModel[]>(`/admin/usage/by-model${dateParams(from, to)}`),
   byTask: (from?: string, to?: string) =>
     api.get<AdminUsageByTask[]>(`/admin/usage/by-task${dateParams(from, to)}`),
+  pricingPlan: (
+    from?: string,
+    to?: string,
+    input?: {
+      targetGrossMarginPct?: number;
+      minimumCogsMarkupPct?: number;
+      fixedPlatformFeeCents?: number;
+      overageMarginPct?: number;
+      safetyOverheadPct?: number;
+      reservePct?: number;
+      minimumPlanPriceCents?: number;
+    },
+  ) =>
+    api.get<AdminPricingPlan>(`/admin/usage/pricing-plan${pricingPlanParams(from, to, input)}`),
+  walletOverview: () =>
+    api.get<AdminWalletOverviewRow[]>("/admin/wallets/overview"),
+  companyWallet: (companyId: string) =>
+    api.get<CompanyWallet>(`/companies/${companyId}/wallet`),
+  companyWalletLedger: (companyId: string, limit: number = 50) =>
+    api.get<CompanyWalletLedgerEntry[]>(`/companies/${companyId}/wallet/ledger?limit=${Math.max(1, Math.floor(limit))}`),
+  topUpCompanyWallet: (
+    companyId: string,
+    payload: {
+      amountCents: number;
+      note?: string;
+      metadataJson?: Record<string, unknown>;
+    },
+  ) =>
+    api.post<{ wallet: CompanyWallet; ledgerEntry: CompanyWalletLedgerEntry }>(
+      `/companies/${companyId}/wallet/top-up`,
+      payload,
+    ),
+  updateCompanyWalletPolicy: (
+    companyId: string,
+    payload: {
+      hardLimitEnforced?: boolean;
+      minRunBalanceCents?: number;
+      lowBalanceThresholdCents?: number;
+    },
+  ) =>
+    api.patch<CompanyWallet>(`/companies/${companyId}/wallet/policy`, payload),
 };

@@ -23,6 +23,7 @@ import { createLocalAgentJwt } from "../agent-auth-jwt.js";
 import { parseObject, asBoolean, asNumber, appendWithCap, MAX_EXCERPT_BYTES } from "../adapters/utils.js";
 import { costService } from "./costs.js";
 import { secretService } from "./secrets.js";
+import { walletService } from "./wallets.js";
 import { resolveDefaultAgentWorkspaceDir } from "../home-paths.js";
 import { summarizeHeartbeatRunResultJson } from "./heartbeat-run-summary.js";
 import {
@@ -424,6 +425,39 @@ function deriveCommentId(
   );
 }
 
+export function sanitizeConfiguredCwdForAgentHomeFallback(input: {
+  adapterConfig: Record<string, unknown>;
+  workspaceSource: string | null | undefined;
+  workspaceCwd: string | null | undefined;
+  platform?: NodeJS.Platform;
+}) {
+  const configuredCwd = readNonEmptyString(input.adapterConfig.cwd);
+  if (!configuredCwd) {
+    return { adapterConfig: input.adapterConfig, warning: null as string | null };
+  }
+
+  if (input.workspaceSource !== "agent_home" || !readNonEmptyString(input.workspaceCwd)) {
+    return { adapterConfig: input.adapterConfig, warning: null as string | null };
+  }
+
+  const platform = input.platform ?? process.platform;
+  const looksLikeForeignDesktopPath =
+    configuredCwd.startsWith("/Users/") || /^[A-Za-z]:[\\/]/.test(configuredCwd);
+
+  if (!looksLikeForeignDesktopPath || platform === "darwin" || platform === "win32") {
+    return { adapterConfig: input.adapterConfig, warning: null as string | null };
+  }
+
+  const nextConfig = { ...input.adapterConfig };
+  delete nextConfig.cwd;
+  return {
+    adapterConfig: nextConfig,
+    warning:
+      `Ignoring configured working directory "${configuredCwd}" because this runtime is using ` +
+      `fallback workspace "${input.workspaceCwd}".`,
+  };
+}
+
 function enrichWakeContextSnapshot(input: {
   contextSnapshot: Record<string, unknown>;
   reason: string | null;
@@ -594,6 +628,7 @@ function resolveNextSessionState(input: {
 export function heartbeatService(db: Db) {
   const runLogStore = getRunLogStore();
   const secretsSvc = secretService(db);
+  const wallets = walletService(db);
   const issuesSvc = issueService(db);
   const activeRunExecutions = new Set<string>();
 
@@ -1469,6 +1504,33 @@ export function heartbeatService(db: Db) {
       return;
     }
 
+    const walletGate = await wallets.canStartRun(agent.companyId);
+    if (!walletGate.allowed) {
+      const failureMessage = walletGate.reason ?? "Wallet exhausted";
+      const finishedAt = new Date();
+      await setRunStatus(run.id, "failed", {
+        error: failureMessage,
+        errorCode: "wallet_exhausted",
+        finishedAt,
+      });
+      await setWakeupStatus(run.wakeupRequestId, "failed", {
+        finishedAt,
+        error: failureMessage,
+      });
+      const failedRun = await getRun(run.id);
+      if (failedRun) {
+        await appendRunEvent(failedRun, 1, {
+          eventType: "error",
+          stream: "system",
+          level: "error",
+          message: failureMessage,
+        });
+        await releaseIssueExecutionAndPromote(failedRun);
+      }
+      await finalizeAgentStatus(agent.id, "failed");
+      return;
+    }
+
     const runtime = await ensureRuntimeState(agent);
     const context = parseObject(run.contextSnapshot);
     const taskKey = deriveTaskKey(context, null);
@@ -1535,9 +1597,14 @@ export function heartbeatService(db: Db) {
     const mergedConfig = issueAssigneeOverrides?.adapterConfig
       ? { ...workspaceManagedConfig, ...issueAssigneeOverrides.adapterConfig }
       : workspaceManagedConfig;
+    const sanitizedConfig = sanitizeConfiguredCwdForAgentHomeFallback({
+      adapterConfig: mergedConfig,
+      workspaceSource: resolvedWorkspace.source,
+      workspaceCwd: resolvedWorkspace.cwd,
+    });
     const { config: resolvedConfig, secretKeys } = await secretsSvc.resolveAdapterConfigForRuntime(
       agent.companyId,
-      mergedConfig,
+      sanitizedConfig.adapterConfig,
     );
     const issueRef = issueId
       ? await db
@@ -1579,6 +1646,7 @@ export function heartbeatService(db: Db) {
     const runtimeWorkspaceWarnings = [
       ...resolvedWorkspace.warnings,
       ...executionWorkspace.warnings,
+      ...(sanitizedConfig.warning ? [sanitizedConfig.warning] : []),
       ...(runtimeSessionResolution.warning ? [runtimeSessionResolution.warning] : []),
       ...(resetTaskSession && sessionResetReason
         ? [

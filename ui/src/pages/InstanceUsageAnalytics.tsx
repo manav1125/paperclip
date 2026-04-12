@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Building2, Cpu, DollarSign, Layers3, ReceiptText } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { BarChart3, Building2, Cpu, DollarSign, Layers3, ReceiptText, SlidersHorizontal, Wallet2 } from "lucide-react";
 import { adminUsageApi } from "@/api/adminUsage";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { queryKeys } from "@/lib/queryKeys";
@@ -8,6 +8,7 @@ import { formatCents, formatDateTime, formatTokens } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 
 type DatePreset = "mtd" | "7d" | "30d" | "ytd" | "all" | "custom";
 
@@ -37,6 +38,10 @@ function computeRange(preset: DatePreset): { from: string; to: string } {
     case "custom":
       return { from: "", to: "" };
   }
+}
+
+function formatPercent(value: number): string {
+  return `${value.toFixed(1)}%`;
 }
 
 function SectionTable({
@@ -96,9 +101,19 @@ function SectionTable({
 
 export function InstanceUsageAnalytics() {
   const { setBreadcrumbs } = useBreadcrumbs();
+  const queryClient = useQueryClient();
   const [preset, setPreset] = useState<DatePreset>("mtd");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  const [walletTopUpUsdByCompany, setWalletTopUpUsdByCompany] = useState<Record<string, string>>({});
+  const [walletTopUpErrorByCompany, setWalletTopUpErrorByCompany] = useState<Record<string, string>>({});
+  const [targetGrossMarginPct, setTargetGrossMarginPct] = useState("55");
+  const [minimumCogsMarkupPct, setMinimumCogsMarkupPct] = useState("100");
+  const [fixedPlatformFeeUsd, setFixedPlatformFeeUsd] = useState("149");
+  const [overageMarginPct, setOverageMarginPct] = useState("55");
+  const [safetyOverheadPct, setSafetyOverheadPct] = useState("15");
+  const [reservePct, setReservePct] = useState("10");
+  const [minimumPlanPriceUsd, setMinimumPlanPriceUsd] = useState("79");
 
   useEffect(() => {
     setBreadcrumbs([
@@ -117,6 +132,32 @@ export function InstanceUsageAnalytics() {
     return computeRange(preset);
   }, [preset, customFrom, customTo]);
 
+  const pricingInput = useMemo(() => {
+    const parse = (value: string): number | undefined => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+    const minimumUsd = parse(minimumPlanPriceUsd);
+    const fixedPlatformFee = parse(fixedPlatformFeeUsd);
+    return {
+      targetGrossMarginPct: parse(targetGrossMarginPct),
+      minimumCogsMarkupPct: parse(minimumCogsMarkupPct),
+      fixedPlatformFeeCents: fixedPlatformFee !== undefined ? Math.round(fixedPlatformFee * 100) : undefined,
+      overageMarginPct: parse(overageMarginPct),
+      safetyOverheadPct: parse(safetyOverheadPct),
+      reservePct: parse(reservePct),
+      minimumPlanPriceCents: minimumUsd !== undefined ? Math.round(minimumUsd * 100) : undefined,
+    };
+  }, [
+    fixedPlatformFeeUsd,
+    minimumCogsMarkupPct,
+    minimumPlanPriceUsd,
+    overageMarginPct,
+    reservePct,
+    safetyOverheadPct,
+    targetGrossMarginPct,
+  ]);
+
   const analyticsQuery = useQuery({
     queryKey: queryKeys.instance.usageAnalytics(from || undefined, to || undefined),
     queryFn: async () => {
@@ -131,7 +172,71 @@ export function InstanceUsageAnalytics() {
     },
   });
 
+  const pricingPlanQuery = useQuery({
+    queryKey: queryKeys.instance.pricingPlan(from || undefined, to || undefined, pricingInput),
+    queryFn: () => adminUsageApi.pricingPlan(from || undefined, to || undefined, pricingInput),
+  });
+
+  const walletOverviewQuery = useQuery({
+    queryKey: queryKeys.instance.walletOverview,
+    queryFn: () => adminUsageApi.walletOverview(),
+  });
+
+  const topUpWalletMutation = useMutation({
+    mutationFn: async (input: { companyId: string; amountCents: number }) => {
+      return adminUsageApi.topUpCompanyWallet(input.companyId, {
+        amountCents: input.amountCents,
+        note: "Manual top-up from instance Usage & Costs",
+      });
+    },
+    onSuccess: async (_data, variables) => {
+      setWalletTopUpErrorByCompany((prev) => ({
+        ...prev,
+        [variables.companyId]: "",
+      }));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.instance.walletOverview }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.instance.usageAnalytics(from || undefined, to || undefined),
+        }),
+      ]);
+    },
+    onError: (error, variables) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Top-up failed. Please verify your access and amount.";
+      setWalletTopUpErrorByCompany((prev) => ({
+        ...prev,
+        [variables.companyId]: message,
+      }));
+    },
+  });
+
   const presetKeys: DatePreset[] = ["mtd", "7d", "30d", "ytd", "all", "custom"];
+
+  function walletTopUpDraft(companyId: string) {
+    return walletTopUpUsdByCompany[companyId] ?? "100";
+  }
+
+  function setWalletTopUpDraft(companyId: string, value: string) {
+    setWalletTopUpUsdByCompany((prev) => ({ ...prev, [companyId]: value }));
+    setWalletTopUpErrorByCompany((prev) => ({ ...prev, [companyId]: "" }));
+  }
+
+  function submitWalletTopUp(companyId: string) {
+    const rawUsd = walletTopUpDraft(companyId);
+    const parsedUsd = Number(rawUsd);
+    if (!Number.isFinite(parsedUsd) || parsedUsd <= 0) {
+      setWalletTopUpErrorByCompany((prev) => ({
+        ...prev,
+        [companyId]: "Enter a valid USD amount greater than 0.",
+      }));
+      return;
+    }
+    const amountCents = Math.round(parsedUsd * 100);
+    topUpWalletMutation.mutate({ companyId, amountCents });
+  }
 
   if (analyticsQuery.isLoading) {
     return <div className="text-sm text-muted-foreground">Loading usage analytics...</div>;
@@ -240,6 +345,379 @@ export function InstanceUsageAnalytics() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Wallet2 className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base">Wallet Enforcement Control</CardTitle>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Hard wallet mode blocks new agent runs when balance is exhausted or below run threshold.
+            Top up wallets here to keep active companies running.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {walletOverviewQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading wallet balances...</p>
+          ) : null}
+
+          {walletOverviewQuery.error ? (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {walletOverviewQuery.error instanceof Error
+                ? walletOverviewQuery.error.message
+                : "Failed to load wallet overview."}
+            </div>
+          ) : null}
+
+          {walletOverviewQuery.data ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="px-3 py-2 font-medium">Organization</th>
+                    <th className="px-3 py-2 font-medium">Wallet balance</th>
+                    <th className="px-3 py-2 font-medium">Hard limit</th>
+                    <th className="px-3 py-2 font-medium">Run threshold</th>
+                    <th className="px-3 py-2 font-medium">Lifetime top-ups</th>
+                    <th className="px-3 py-2 font-medium">Lifetime debits</th>
+                    <th className="px-3 py-2 font-medium">Top-up (USD)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {walletOverviewQuery.data.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-3 py-4 text-sm text-muted-foreground">
+                        No companies available.
+                      </td>
+                    </tr>
+                  ) : (
+                    walletOverviewQuery.data.map((row) => {
+                      const busy =
+                        topUpWalletMutation.isPending &&
+                        topUpWalletMutation.variables?.companyId === row.companyId;
+                      const topUpError = walletTopUpErrorByCompany[row.companyId];
+                      return (
+                        <tr key={row.companyId} className="border-b border-border/60 last:border-b-0">
+                          <td className="px-3 py-3 align-top">
+                            <div className="space-y-1">
+                              <div className="font-medium">{row.companyName}</div>
+                              <div className="text-xs text-muted-foreground">{row.issuePrefix}</div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 align-top">
+                            <div className="font-medium tabular-nums">
+                              {row.balanceCents != null ? formatCents(row.balanceCents) : "—"}
+                            </div>
+                            {row.balanceCents != null && row.lowBalanceThresholdCents != null ? (
+                              <div className="text-xs text-muted-foreground">
+                                Alert below {formatCents(row.lowBalanceThresholdCents)}
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-3 align-top">
+                            <Badge variant={row.hardLimitEnforced ? "default" : "outline"}>
+                              {row.hardLimitEnforced ? "enforced" : "disabled"}
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-3 align-top tabular-nums">
+                            {row.minRunBalanceCents != null ? formatCents(row.minRunBalanceCents) : "—"}
+                          </td>
+                          <td className="px-3 py-3 align-top tabular-nums">
+                            {row.lifetimeCreditsCents != null ? formatCents(row.lifetimeCreditsCents) : "—"}
+                          </td>
+                          <td className="px-3 py-3 align-top tabular-nums">
+                            {row.lifetimeDebitsCents != null ? formatCents(row.lifetimeDebitsCents) : "—"}
+                          </td>
+                          <td className="px-3 py-3 align-top">
+                            <div className="flex min-w-[220px] items-start gap-2">
+                              <Input
+                                value={walletTopUpDraft(row.companyId)}
+                                onChange={(event) => setWalletTopUpDraft(row.companyId, event.target.value)}
+                                className="h-8"
+                                inputMode="decimal"
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => submitWalletTopUp(row.companyId)}
+                                disabled={busy}
+                              >
+                                {busy ? "Adding..." : "Top up"}
+                              </Button>
+                            </div>
+                            {topUpError ? (
+                              <p className="mt-1 text-xs text-destructive">{topUpError}</p>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="space-y-2">
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base">Pricing Lab</CardTitle>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Turn live usage into recommended tiers. Adjust the knobs until your pricing hits the
+            business model you want: a platform subscription fee plus a guaranteed markup over LLM burn.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Target gross margin (%)</span>
+              <Input
+                type="number"
+                min={0}
+                max={95}
+                step={1}
+                value={targetGrossMarginPct}
+                onChange={(event) => setTargetGrossMarginPct(event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Min markup on LLM burn (%)</span>
+              <Input
+                type="number"
+                min={100}
+                max={600}
+                step={5}
+                value={minimumCogsMarkupPct}
+                onChange={(event) => setMinimumCogsMarkupPct(event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Fixed platform fee (USD)</span>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={fixedPlatformFeeUsd}
+                onChange={(event) => setFixedPlatformFeeUsd(event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Overage margin (%)</span>
+              <Input
+                type="number"
+                min={0}
+                max={95}
+                step={1}
+                value={overageMarginPct}
+                onChange={(event) => setOverageMarginPct(event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Safety overhead (%)</span>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={safetyOverheadPct}
+                onChange={(event) => setSafetyOverheadPct(event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Reserve cushion (%)</span>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={reservePct}
+                onChange={(event) => setReservePct(event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Minimum plan price (USD)</span>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={minimumPlanPriceUsd}
+                onChange={(event) => setMinimumPlanPriceUsd(event.target.value)}
+              />
+            </label>
+          </div>
+
+          {pricingPlanQuery.isLoading ? (
+            <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+              Building pricing recommendations...
+            </div>
+          ) : null}
+
+          {pricingPlanQuery.error ? (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {pricingPlanQuery.error instanceof Error
+                ? pricingPlanQuery.error.message
+                : "Failed to calculate pricing recommendations."}
+            </div>
+          ) : null}
+
+          {pricingPlanQuery.data ? (
+            <>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <Card className="border-border/70">
+                  <CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Blended cost / LLM event</p>
+                    <p className="text-lg font-semibold tabular-nums">
+                      {formatCents(Math.round(pricingPlanQuery.data.observed.averageCostPerApiCallCents))}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Blended cost / 1K tokens</p>
+                    <p className="text-lg font-semibold tabular-nums">
+                      {formatCents(Math.round(pricingPlanQuery.data.observed.averageCostPer1kTokensCents))}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Avg cost / active agent</p>
+                    <p className="text-lg font-semibold tabular-nums">
+                      {formatCents(Math.round(pricingPlanQuery.data.observed.averageCostPerActiveAgentCents))}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70">
+                  <CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">Avg cost / task thread</p>
+                    <p className="text-lg font-semibold tabular-nums">
+                      {formatCents(Math.round(pricingPlanQuery.data.observed.averageCostPerTaskCents))}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <SectionTable
+                title="Recommended SaaS Tiers"
+                description="Use these as your default packaging: monthly fee + included usage + overage."
+                headers={[
+                  "Tier",
+                  "Monthly fee",
+                  "Included usage value",
+                  "Included LLM events",
+                  "Included tokens",
+                  "LLM markup",
+                  "Gross margin",
+                ]}
+                rows={pricingPlanQuery.data.recommendations.tiers.map((tier) => [
+                  <div className="space-y-1" key={`${tier.tier}-name`}>
+                    <div className="font-medium">{tier.tier}</div>
+                    <div className="text-xs text-muted-foreground">{tier.idealFor}</div>
+                  </div>,
+                  <span className="tabular-nums font-medium" key={`${tier.tier}-price`}>
+                    {formatCents(tier.monthlyPriceCents)}
+                  </span>,
+                  <span className="tabular-nums" key={`${tier.tier}-credits`}>
+                    {formatCents(tier.includedUsageCents)}
+                  </span>,
+                  <span className="tabular-nums" key={`${tier.tier}-calls`}>
+                    {tier.includedApiCallsEstimate.toLocaleString()}
+                  </span>,
+                  <span className="tabular-nums" key={`${tier.tier}-tokens`}>
+                    {formatTokens(tier.includedTokensEstimate)}
+                  </span>,
+                  <span className="tabular-nums" key={`${tier.tier}-llm-markup`}>
+                    {formatPercent(tier.llmMarkupPct)}
+                  </span>,
+                  <span className="tabular-nums" key={`${tier.tier}-margin`}>
+                    {formatPercent(tier.effectiveGrossMarginPct)}
+                  </span>,
+                ])}
+              />
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <SectionTable
+                  title="Overage Recommendation"
+                  description="Charge overages at this rate to protect margin when customers exceed included usage."
+                  headers={["Metric", "Suggested overage"]}
+                  rows={[
+                    [
+                      <span key="overage-call-label">Per LLM event</span>,
+                      <span className="tabular-nums font-medium" key="overage-call-value">
+                        {formatCents(pricingPlanQuery.data.recommendations.overage.perApiCallCents)}
+                      </span>,
+                    ],
+                    [
+                      <span key="overage-token-label">Per 1K tokens</span>,
+                      <span className="tabular-nums font-medium" key="overage-token-value">
+                        {formatCents(pricingPlanQuery.data.recommendations.overage.per1kTokensCents)}
+                      </span>,
+                    ],
+                  ]}
+                />
+
+                <SectionTable
+                  title="Top-up Pack Suggestions"
+                  description="Optional prepaid packs to keep workloads running without plan upgrades."
+                  headers={["Sell price", "Usage value", "Estimated events", "Estimated tokens"]}
+                  rows={pricingPlanQuery.data.recommendations.creditPacks.map((pack) => [
+                    <span className="tabular-nums font-medium" key={`${pack.sellPriceCents}-sell`}>
+                      {formatCents(pack.sellPriceCents)}
+                    </span>,
+                    <span className="tabular-nums" key={`${pack.sellPriceCents}-value`}>
+                      {formatCents(pack.usageValueCents)}
+                    </span>,
+                    <span className="tabular-nums" key={`${pack.sellPriceCents}-calls`}>
+                      {pack.includedApiCallsEstimate.toLocaleString()}
+                    </span>,
+                    <span className="tabular-nums" key={`${pack.sellPriceCents}-tokens`}>
+                      {formatTokens(pack.includedTokensEstimate)}
+                    </span>,
+                  ])}
+                />
+              </div>
+
+              <Card className="border-border/70">
+                <CardHeader className="space-y-1 pb-2">
+                  <CardTitle className="text-sm">Pricing Guardrails</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm text-muted-foreground">
+                  <p>
+                    Pricing floor: at least{" "}
+                    <span className="font-medium text-foreground">
+                      {formatPercent(pricingPlanQuery.data.parameters.minimumCogsMarkupPct)}
+                    </span>{" "}
+                    markup on LLM burn plus{" "}
+                    <span className="font-medium text-foreground">
+                      {formatCents(pricingPlanQuery.data.parameters.fixedPlatformFeeCents)}
+                    </span>{" "}
+                    monthly platform fee.
+                  </p>
+                  {pricingPlanQuery.data.recommendations.guardrails.map((guardrail) => (
+                    <p key={guardrail}>- {guardrail}</p>
+                  ))}
+                  {pricingPlanQuery.data.observed.topProvider ? (
+                    <p>
+                      Top provider concentration: {pricingPlanQuery.data.observed.topProvider.provider} at{" "}
+                      {formatPercent(pricingPlanQuery.data.observed.topProvider.sharePct)}.
+                    </p>
+                  ) : null}
+                  {pricingPlanQuery.data.observed.topModel ? (
+                    <p>
+                      Top model concentration: {pricingPlanQuery.data.observed.topModel.model} at{" "}
+                      {formatPercent(pricingPlanQuery.data.observed.topModel.sharePct)}.
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <SectionTable
         title="By Organization"

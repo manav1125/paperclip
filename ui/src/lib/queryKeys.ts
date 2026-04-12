@@ -61,6 +61,32 @@ export const queryKeys = {
   instance: {
     schedulerHeartbeats: ["instance", "scheduler-heartbeats"] as const,
     usageAnalytics: (from?: string, to?: string) => ["instance", "usage-analytics", from, to] as const,
+    walletOverview: ["instance", "wallet-overview"] as const,
+    pricingPlan: (
+      from?: string,
+      to?: string,
+      input?: {
+        targetGrossMarginPct?: number;
+        minimumCogsMarkupPct?: number;
+        fixedPlatformFeeCents?: number;
+        overageMarginPct?: number;
+        safetyOverheadPct?: number;
+        reservePct?: number;
+        minimumPlanPriceCents?: number;
+      },
+    ) => [
+      "instance",
+      "pricing-plan",
+      from,
+      to,
+      input?.targetGrossMarginPct,
+      input?.minimumCogsMarkupPct,
+      input?.fixedPlatformFeeCents,
+      input?.overageMarginPct,
+      input?.safetyOverheadPct,
+      input?.reservePct,
+      input?.minimumPlanPriceCents,
+    ] as const,
   },
   health: ["health"] as const,
   secrets: {

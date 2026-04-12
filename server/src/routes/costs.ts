@@ -2,12 +2,15 @@ import { Router, type Request, type Response } from "express";
 import type { Db } from "@paperclipai/db";
 import { createCostEventSchema, updateBudgetSchema } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
-import { costService, companyService, agentService, logActivity } from "../services/index.js";
+import { accessService, costService, companyService, agentService, logActivity, walletService } from "../services/index.js";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
+import { forbidden, unprocessable } from "../errors.js";
 
 export function costRoutes(db: Db) {
   const router = Router();
   const costs = costService(db);
+  const wallets = walletService(db);
+  const access = accessService(db);
   const companies = companyService(db);
   const agents = agentService(db);
 
@@ -119,6 +122,159 @@ export function costRoutes(db: Db) {
     const range = parseDateRange(req.query);
     const rows = await costs.adminByTask(companyIds, range);
     res.json(rows);
+  });
+
+  router.get("/admin/usage/pricing-plan", async (req, res) => {
+    const companyIds = resolveAdminUsageCompanyScope(req, res);
+    if (companyIds === null) return;
+    const range = parseDateRange(req.query);
+    const parseNumber = (value: unknown): number | undefined => {
+      if (value === undefined || value === null || value === "") return undefined;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+
+    const plan = await costs.adminPricingPlan(companyIds, range, {
+      targetGrossMarginPct: parseNumber(req.query.targetGrossMarginPct),
+      minimumCogsMarkupPct: parseNumber(req.query.minimumCogsMarkupPct),
+      fixedPlatformFeeCents: parseNumber(req.query.fixedPlatformFeeCents),
+      overageMarginPct: parseNumber(req.query.overageMarginPct),
+      safetyOverheadPct: parseNumber(req.query.safetyOverheadPct),
+      reservePct: parseNumber(req.query.reservePct),
+      minimumPlanPriceCents: parseNumber(req.query.minimumPlanPriceCents),
+    });
+    res.json(plan);
+  });
+
+  router.get("/admin/wallets/overview", async (req, res) => {
+    const companyIds = resolveAdminUsageCompanyScope(req, res);
+    if (companyIds === null) return;
+    const rows = await wallets.adminOverview(companyIds);
+    res.json(rows);
+  });
+
+  router.get("/companies/:companyId/wallet", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    const wallet = await wallets.getOrCreate(companyId);
+    res.json(wallet);
+  });
+
+  router.get("/companies/:companyId/wallet/ledger", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    const limitRaw = req.query.limit;
+    const limit = typeof limitRaw === "string" ? Number(limitRaw) : undefined;
+    const rows = await wallets.listLedger(companyId, { limit: Number.isFinite(limit) ? limit : undefined });
+    res.json(rows);
+  });
+
+  async function assertWalletManager(req: Request, companyId: string) {
+    if (req.actor.type !== "board") {
+      throw forbidden("Board authentication required");
+    }
+    if (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin) {
+      return;
+    }
+    const allowed = await access.canUser(companyId, req.actor.userId, "joins:approve");
+    if (!allowed) {
+      throw forbidden("Instance admin or company owner required");
+    }
+  }
+
+  router.post("/companies/:companyId/wallet/top-up", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    await assertWalletManager(req, companyId);
+
+    const rawAmount = req.body?.amountCents;
+    const amountCents = Number(rawAmount);
+    if (!Number.isFinite(amountCents) || amountCents <= 0) {
+      throw unprocessable("amountCents must be a positive number");
+    }
+
+    const result = await wallets.topUp(companyId, {
+      amountCents,
+      note: typeof req.body?.note === "string" ? req.body.note : null,
+      sourceRef: req.actor.userId ?? null,
+      metadataJson:
+        typeof req.body?.metadataJson === "object" && req.body?.metadataJson !== null
+          ? req.body.metadataJson as Record<string, unknown>
+          : null,
+    });
+
+    await logActivity(db, {
+      companyId,
+      actorType: "user",
+      actorId: req.actor.userId ?? "board",
+      agentId: null,
+      action: "wallet.topped_up",
+      entityType: "company",
+      entityId: companyId,
+      details: {
+        amountCents: Math.floor(amountCents),
+        balanceCents: result.wallet.balanceCents,
+      },
+    });
+
+    res.status(201).json(result);
+  });
+
+  router.patch("/companies/:companyId/wallet/policy", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    await assertWalletManager(req, companyId);
+
+    const minRunBalanceCentsRaw = req.body?.minRunBalanceCents;
+    const minRunBalanceCents =
+      minRunBalanceCentsRaw !== undefined ? Number(minRunBalanceCentsRaw) : undefined;
+    const lowBalanceThresholdCentsRaw = req.body?.lowBalanceThresholdCents;
+    const lowBalanceThresholdCents =
+      lowBalanceThresholdCentsRaw !== undefined ? Number(lowBalanceThresholdCentsRaw) : undefined;
+    const hardLimitEnforcedRaw = req.body?.hardLimitEnforced;
+
+    if (
+      hardLimitEnforcedRaw !== undefined &&
+      typeof hardLimitEnforcedRaw !== "boolean"
+    ) {
+      throw unprocessable("hardLimitEnforced must be a boolean when provided");
+    }
+    if (
+      minRunBalanceCents !== undefined &&
+      (!Number.isFinite(minRunBalanceCents) || minRunBalanceCents < 0)
+    ) {
+      throw unprocessable("minRunBalanceCents must be a non-negative number");
+    }
+    if (
+      lowBalanceThresholdCents !== undefined &&
+      (!Number.isFinite(lowBalanceThresholdCents) || lowBalanceThresholdCents < 0)
+    ) {
+      throw unprocessable("lowBalanceThresholdCents must be a non-negative number");
+    }
+
+    const wallet = await wallets.applyPolicy(companyId, {
+      hardLimitEnforced: hardLimitEnforcedRaw,
+      minRunBalanceCents: minRunBalanceCents === undefined ? undefined : Math.floor(minRunBalanceCents),
+      lowBalanceThresholdCents:
+        lowBalanceThresholdCents === undefined ? undefined : Math.floor(lowBalanceThresholdCents),
+    });
+
+    await logActivity(db, {
+      companyId,
+      actorType: "user",
+      actorId: req.actor.userId ?? "board",
+      agentId: null,
+      action: "wallet.policy_updated",
+      entityType: "company",
+      entityId: companyId,
+      details: {
+        hardLimitEnforced: wallet?.hardLimitEnforced ?? null,
+        minRunBalanceCents: wallet?.minRunBalanceCents ?? null,
+        lowBalanceThresholdCents: wallet?.lowBalanceThresholdCents ?? null,
+      },
+    });
+
+    res.json(wallet);
   });
 
   router.patch("/companies/:companyId/budgets", validate(updateBudgetSchema), async (req, res) => {

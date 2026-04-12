@@ -34,6 +34,7 @@ import { NewAgent } from "./pages/NewAgent";
 import { AuthPage } from "./pages/Auth";
 import { BoardClaimPage } from "./pages/BoardClaim";
 import { InviteLandingPage } from "./pages/InviteLanding";
+import { LandingPage } from "./pages/Landing";
 import { NotFoundPage } from "./pages/NotFound";
 import { queryKeys } from "./lib/queryKeys";
 import { useCompany } from "./context/CompanyContext";
@@ -76,6 +77,8 @@ function CloudAccessGate() {
   });
 
   const isAuthenticatedMode = healthQuery.data?.deploymentMode === "authenticated";
+  const isPublicAuthenticatedMode =
+    isAuthenticatedMode && healthQuery.data?.deploymentExposure === "public";
   const sessionQuery = useQuery({
     queryKey: queryKeys.auth.session,
     queryFn: () => authApi.getSession(),
@@ -96,10 +99,22 @@ function CloudAccessGate() {
   }
 
   if (isAuthenticatedMode && healthQuery.data?.bootstrapStatus === "bootstrap_pending") {
-    return <BootstrapPendingPage hasActiveInvite={healthQuery.data.bootstrapInviteActive} />;
+    if (!isPublicAuthenticatedMode) {
+      return <BootstrapPendingPage hasActiveInvite={healthQuery.data.bootstrapInviteActive} />;
+    }
+    if (!sessionQuery.data) {
+      if (location.pathname === "/") {
+        return <LandingPage />;
+      }
+      const next = encodeURIComponent(`${location.pathname}${location.search}`);
+      return <Navigate to={`/auth?next=${next}`} replace />;
+    }
   }
 
   if (isAuthenticatedMode && !sessionQuery.data) {
+    if (location.pathname === "/") {
+      return <LandingPage />;
+    }
     const next = encodeURIComponent(`${location.pathname}${location.search}`);
     return <Navigate to={`/auth?next=${next}`} replace />;
   }
@@ -294,6 +309,7 @@ export function App() {
   return (
     <>
       <Routes>
+        <Route path="landing" element={<LandingPage />} />
         <Route path="auth" element={<AuthPage />} />
         <Route path="board-claim/:token" element={<BoardClaimPage />} />
         <Route path="invite/:token" element={<InviteLandingPage />} />

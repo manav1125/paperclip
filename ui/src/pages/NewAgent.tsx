@@ -12,7 +12,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Shield, User } from "lucide-react";
+import { Briefcase, Megaphone, Rocket, Shield, User, Wrench } from "lucide-react";
 import { cn, agentUrl } from "../lib/utils";
 import { roleLabels } from "../components/agent-config-primitives";
 import { AgentConfigForm, type CreateConfigValues } from "../components/AgentConfigForm";
@@ -25,6 +25,41 @@ import {
 } from "@paperclipai/adapter-codex-local";
 import { DEFAULT_CURSOR_LOCAL_MODEL } from "@paperclipai/adapter-cursor-local";
 import { DEFAULT_GEMINI_LOCAL_MODEL } from "@paperclipai/adapter-gemini-local";
+
+const QUICK_ROLE_PRESETS = [
+  {
+    id: "ceo",
+    label: "CEO",
+    title: "CEO",
+    role: "ceo",
+    description: "Best first operator. Owns the top-level direction and delegates work.",
+    icon: Rocket,
+  },
+  {
+    id: "cto",
+    label: "CTO",
+    title: "CTO",
+    role: "cto",
+    description: "Owns product and technical execution once the company direction is clear.",
+    icon: Wrench,
+  },
+  {
+    id: "cmo",
+    label: "CMO",
+    title: "CMO",
+    role: "cmo",
+    description: "Owns positioning, campaigns, and distribution after the first operator is stable.",
+    icon: Megaphone,
+  },
+  {
+    id: "pm",
+    label: "Chief of Staff / PM",
+    title: "Chief of Staff",
+    role: "pm",
+    description: "Good for coordination, briefs, follow-ups, and keeping work organized.",
+    icon: Briefcase,
+  },
+] as const;
 
 const SUPPORTED_ADVANCED_ADAPTER_TYPES = new Set<CreateConfigValues["adapterType"]>([
   "claude_local",
@@ -191,6 +226,15 @@ export function NewAgent() {
 
   const currentReportsTo = (agents ?? []).find((a) => a.id === reportsTo);
 
+  function applyPreset(preset: (typeof QUICK_ROLE_PRESETS)[number]) {
+    setName(preset.label);
+    setTitle(preset.title);
+    setRole(preset.role);
+    if (preset.role === "ceo") {
+      setReportsTo("");
+    }
+  }
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
@@ -198,6 +242,47 @@ export function NewAgent() {
         <p className="text-sm text-muted-foreground mt-1">
           Advanced agent configuration
         </p>
+      </div>
+
+      <div className="rounded-xl border border-border/80 bg-muted/15 p-4">
+        <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+          Quick start roles
+        </div>
+        <div className="mt-2 text-sm text-muted-foreground">
+          Start with one focused operator. Choose a preset to prefill the role, then adjust the runtime details below only if you need to.
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {QUICK_ROLE_PRESETS.map((preset) => {
+            const Icon = preset.icon;
+            const active =
+              name.trim() === preset.label &&
+              title.trim() === preset.title &&
+              effectiveRole === preset.role;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => applyPreset(preset)}
+                className={cn(
+                  "rounded-xl border p-4 text-left transition-colors",
+                  active ? "border-foreground bg-background" : "border-border hover:bg-background/70",
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-muted/60 text-foreground">
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold">{preset.label}</div>
+                    <div className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {preset.description}
+                    </div>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="border border-border">

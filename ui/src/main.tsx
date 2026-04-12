@@ -11,6 +11,7 @@ import { BreadcrumbProvider } from "./context/BreadcrumbContext";
 import { PanelProvider } from "./context/PanelContext";
 import { SidebarProvider } from "./context/SidebarContext";
 import { DialogProvider } from "./context/DialogContext";
+import { ProductGuideProvider } from "./context/ProductGuideContext";
 import { ToastProvider } from "./context/ToastContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -50,7 +51,9 @@ createRoot(document.getElementById("root")!).render(
                       <PanelProvider>
                         <PluginLauncherProvider>
                           <DialogProvider>
-                            <App />
+                            <ProductGuideProvider>
+                              <App />
+                            </ProductGuideProvider>
                           </DialogProvider>
                         </PluginLauncherProvider>
                       </PanelProvider>
