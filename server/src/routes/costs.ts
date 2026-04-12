@@ -133,6 +133,8 @@ export function costRoutes(db: Db) {
 
     const plan = await costs.adminPricingPlan(companyIds, range, {
       targetGrossMarginPct: parseNumber(req.query.targetGrossMarginPct),
+      minimumCogsMarkupPct: parseNumber(req.query.minimumCogsMarkupPct),
+      fixedPlatformFeeCents: parseNumber(req.query.fixedPlatformFeeCents),
       overageMarginPct: parseNumber(req.query.overageMarginPct),
       safetyOverheadPct: parseNumber(req.query.safetyOverheadPct),
       reservePct: parseNumber(req.query.reservePct),

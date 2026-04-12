@@ -62,6 +62,8 @@ export interface AdminUsageByTask {
 export interface AdminPricingPlan {
   parameters: {
     targetGrossMarginPct: number;
+    minimumCogsMarkupPct: number;
+    fixedPlatformFeeCents: number;
     overageMarginPct: number;
     safetyOverheadPct: number;
     reservePct: number;
@@ -104,6 +106,7 @@ export interface AdminPricingPlan {
       includedApiCallsEstimate: number;
       includedTokensEstimate: number;
       effectiveGrossMarginPct: number;
+      llmMarkupPct: number;
     }>;
     overage: {
       perApiCallCents: number;
@@ -132,6 +135,8 @@ function pricingPlanParams(
   to?: string,
   input?: {
     targetGrossMarginPct?: number;
+    minimumCogsMarkupPct?: number;
+    fixedPlatformFeeCents?: number;
     overageMarginPct?: number;
     safetyOverheadPct?: number;
     reservePct?: number;
@@ -146,6 +151,12 @@ function pricingPlanParams(
   }
   if (input?.overageMarginPct !== undefined) {
     params.set("overageMarginPct", String(input.overageMarginPct));
+  }
+  if (input?.minimumCogsMarkupPct !== undefined) {
+    params.set("minimumCogsMarkupPct", String(input.minimumCogsMarkupPct));
+  }
+  if (input?.fixedPlatformFeeCents !== undefined) {
+    params.set("fixedPlatformFeeCents", String(input.fixedPlatformFeeCents));
   }
   if (input?.safetyOverheadPct !== undefined) {
     params.set("safetyOverheadPct", String(input.safetyOverheadPct));
@@ -176,6 +187,8 @@ export const adminUsageApi = {
     to?: string,
     input?: {
       targetGrossMarginPct?: number;
+      minimumCogsMarkupPct?: number;
+      fixedPlatformFeeCents?: number;
       overageMarginPct?: number;
       safetyOverheadPct?: number;
       reservePct?: number;

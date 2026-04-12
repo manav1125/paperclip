@@ -104,7 +104,9 @@ export function InstanceUsageAnalytics() {
   const [preset, setPreset] = useState<DatePreset>("mtd");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
-  const [targetGrossMarginPct, setTargetGrossMarginPct] = useState("65");
+  const [targetGrossMarginPct, setTargetGrossMarginPct] = useState("55");
+  const [minimumCogsMarkupPct, setMinimumCogsMarkupPct] = useState("100");
+  const [fixedPlatformFeeUsd, setFixedPlatformFeeUsd] = useState("149");
   const [overageMarginPct, setOverageMarginPct] = useState("55");
   const [safetyOverheadPct, setSafetyOverheadPct] = useState("15");
   const [reservePct, setReservePct] = useState("10");
@@ -133,14 +135,19 @@ export function InstanceUsageAnalytics() {
       return Number.isFinite(parsed) ? parsed : undefined;
     };
     const minimumUsd = parse(minimumPlanPriceUsd);
+    const fixedPlatformFee = parse(fixedPlatformFeeUsd);
     return {
       targetGrossMarginPct: parse(targetGrossMarginPct),
+      minimumCogsMarkupPct: parse(minimumCogsMarkupPct),
+      fixedPlatformFeeCents: fixedPlatformFee !== undefined ? Math.round(fixedPlatformFee * 100) : undefined,
       overageMarginPct: parse(overageMarginPct),
       safetyOverheadPct: parse(safetyOverheadPct),
       reservePct: parse(reservePct),
       minimumPlanPriceCents: minimumUsd !== undefined ? Math.round(minimumUsd * 100) : undefined,
     };
   }, [
+    fixedPlatformFeeUsd,
+    minimumCogsMarkupPct,
     minimumPlanPriceUsd,
     overageMarginPct,
     reservePct,
@@ -285,11 +292,11 @@ export function InstanceUsageAnalytics() {
           </div>
           <p className="text-sm text-muted-foreground">
             Turn live usage into recommended tiers. Adjust the knobs until your pricing hits the
-            gross margin you want while still leaving enough included usage for customers to run smoothly.
+            business model you want: a platform subscription fee plus a guaranteed markup over LLM burn.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
             <label className="space-y-1 text-xs text-muted-foreground">
               <span>Target gross margin (%)</span>
               <Input
@@ -299,6 +306,27 @@ export function InstanceUsageAnalytics() {
                 step={1}
                 value={targetGrossMarginPct}
                 onChange={(event) => setTargetGrossMarginPct(event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Min markup on LLM burn (%)</span>
+              <Input
+                type="number"
+                min={100}
+                max={600}
+                step={5}
+                value={minimumCogsMarkupPct}
+                onChange={(event) => setMinimumCogsMarkupPct(event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Fixed platform fee (USD)</span>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={fixedPlatformFeeUsd}
+                onChange={(event) => setFixedPlatformFeeUsd(event.target.value)}
               />
             </label>
             <label className="space-y-1 text-xs text-muted-foreground">
@@ -406,6 +434,7 @@ export function InstanceUsageAnalytics() {
                   "Included usage value",
                   "Included LLM events",
                   "Included tokens",
+                  "LLM markup",
                   "Gross margin",
                 ]}
                 rows={pricingPlanQuery.data.recommendations.tiers.map((tier) => [
@@ -424,6 +453,9 @@ export function InstanceUsageAnalytics() {
                   </span>,
                   <span className="tabular-nums" key={`${tier.tier}-tokens`}>
                     {formatTokens(tier.includedTokensEstimate)}
+                  </span>,
+                  <span className="tabular-nums" key={`${tier.tier}-llm-markup`}>
+                    {formatPercent(tier.llmMarkupPct)}
                   </span>,
                   <span className="tabular-nums" key={`${tier.tier}-margin`}>
                     {formatPercent(tier.effectiveGrossMarginPct)}
@@ -478,6 +510,17 @@ export function InstanceUsageAnalytics() {
                   <CardTitle className="text-sm">Pricing Guardrails</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm text-muted-foreground">
+                  <p>
+                    Pricing floor: at least{" "}
+                    <span className="font-medium text-foreground">
+                      {formatPercent(pricingPlanQuery.data.parameters.minimumCogsMarkupPct)}
+                    </span>{" "}
+                    markup on LLM burn plus{" "}
+                    <span className="font-medium text-foreground">
+                      {formatCents(pricingPlanQuery.data.parameters.fixedPlatformFeeCents)}
+                    </span>{" "}
+                    monthly platform fee.
+                  </p>
                   {pricingPlanQuery.data.recommendations.guardrails.map((guardrail) => (
                     <p key={guardrail}>- {guardrail}</p>
                   ))}

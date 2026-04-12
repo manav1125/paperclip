@@ -10,6 +10,8 @@ export interface CostDateRange {
 
 export interface AdminPricingPlanInput {
   targetGrossMarginPct?: number;
+  minimumCogsMarkupPct?: number;
+  fixedPlatformFeeCents?: number;
   overageMarginPct?: number;
   safetyOverheadPct?: number;
   reservePct?: number;
@@ -384,7 +386,9 @@ export function costService(db: Db) {
       range?: CostDateRange,
       input?: AdminPricingPlanInput,
     ) => {
-      const targetGrossMarginPct = clamp(input?.targetGrossMarginPct ?? 65, 30, 90);
+      const targetGrossMarginPct = clamp(input?.targetGrossMarginPct ?? 55, 30, 90);
+      const minimumCogsMarkupPct = clamp(input?.minimumCogsMarkupPct ?? 100, 100, 600);
+      const fixedPlatformFeeCents = Math.max(0, Math.floor(input?.fixedPlatformFeeCents ?? 14900));
       const overageMarginPct = clamp(input?.overageMarginPct ?? 55, 20, 90);
       const safetyOverheadPct = clamp(input?.safetyOverheadPct ?? 15, 0, 100);
       const reservePct = clamp(input?.reservePct ?? 10, 0, 100);
@@ -483,6 +487,7 @@ export function costService(db: Db) {
       const topModelSharePct = safeDivide(Number(topModel?.spendCents ?? 0) * 100, spendCents);
       const overheadMultiplier = 1 + (safetyOverheadPct + reservePct) / 100;
       const targetMarginRatio = targetGrossMarginPct / 100;
+      const minimumCogsMarkupRatio = minimumCogsMarkupPct / 100;
       const overageMarginRatio = overageMarginPct / 100;
 
       const starterBaselineCents = Math.max(spendP50Cents, averageCompanySpendCents * 0.7, 7500);
@@ -504,11 +509,20 @@ export function costService(db: Db) {
 
       function buildTier(name: "Starter" | "Growth" | "Scale", baselineCents: number, idealFor: string) {
         const includedUsageCents = roundUp(Math.max(baselineCents * overheadMultiplier, 5000), 2500);
-        const floorPrice = includedUsageCents / Math.max(0.01, 1 - targetMarginRatio);
-        const monthlyPriceCents = Math.max(minimumPlanPriceCents, roundUp(floorPrice, 500));
+        const marginFloorPrice = includedUsageCents / Math.max(0.01, 1 - targetMarginRatio);
+        const markupFloorPrice =
+          fixedPlatformFeeCents + includedUsageCents * (1 + minimumCogsMarkupRatio);
+        const monthlyPriceCents = Math.max(
+          minimumPlanPriceCents,
+          roundUp(Math.max(marginFloorPrice, markupFloorPrice), 500),
+        );
         const { includedApiCallsEstimate, includedTokensEstimate } = estimateInclusion(includedUsageCents);
         const effectiveGrossMarginPct = monthlyPriceCents > 0
           ? ((monthlyPriceCents - includedUsageCents) / monthlyPriceCents) * 100
+          : 0;
+        const llmOnlyRevenueCents = Math.max(0, monthlyPriceCents - fixedPlatformFeeCents);
+        const llmMarkupPct = includedUsageCents > 0
+          ? ((llmOnlyRevenueCents - includedUsageCents) / includedUsageCents) * 100
           : 0;
         return {
           tier: name,
@@ -518,6 +532,7 @@ export function costService(db: Db) {
           includedApiCallsEstimate,
           includedTokensEstimate,
           effectiveGrossMarginPct: Number(effectiveGrossMarginPct.toFixed(2)),
+          llmMarkupPct: Number(llmMarkupPct.toFixed(2)),
         };
       }
 
@@ -528,14 +543,28 @@ export function costService(db: Db) {
       ];
 
       const overageApiCallCents = averageCostPerApiCallCents > 0
-        ? roundUp((averageCostPerApiCallCents * overheadMultiplier) / Math.max(0.01, 1 - overageMarginRatio), 1)
+        ? roundUp(
+            Math.max(
+              (averageCostPerApiCallCents * overheadMultiplier) / Math.max(0.01, 1 - overageMarginRatio),
+              averageCostPerApiCallCents * overheadMultiplier * (1 + minimumCogsMarkupRatio),
+            ),
+            1,
+          )
         : 0;
       const overagePer1kTokensCents = averageCostPer1kTokensCents > 0
-        ? roundUp((averageCostPer1kTokensCents * overheadMultiplier) / Math.max(0.01, 1 - overageMarginRatio), 1)
+        ? roundUp(
+            Math.max(
+              (averageCostPer1kTokensCents * overheadMultiplier) / Math.max(0.01, 1 - overageMarginRatio),
+              averageCostPer1kTokensCents * overheadMultiplier * (1 + minimumCogsMarkupRatio),
+            ),
+            1,
+          )
         : 0;
 
       const creditPacks = [9900, 24900, 49900].map((sellPriceCents) => {
-        const usageValueCents = Math.max(0, Math.floor(sellPriceCents * (1 - overageMarginRatio)));
+        const usageValueFromMargin = Math.floor(sellPriceCents * (1 - overageMarginRatio));
+        const usageValueFromMarkup = Math.floor(sellPriceCents / (1 + minimumCogsMarkupRatio));
+        const usageValueCents = Math.max(0, Math.min(usageValueFromMargin, usageValueFromMarkup));
         const { includedApiCallsEstimate, includedTokensEstimate } = estimateInclusion(usageValueCents);
         return {
           sellPriceCents,
@@ -566,6 +595,8 @@ export function costService(db: Db) {
       return {
         parameters: {
           targetGrossMarginPct,
+          minimumCogsMarkupPct,
+          fixedPlatformFeeCents,
           overageMarginPct,
           safetyOverheadPct,
           reservePct,

@@ -66,6 +66,8 @@ export const queryKeys = {
       to?: string,
       input?: {
         targetGrossMarginPct?: number;
+        minimumCogsMarkupPct?: number;
+        fixedPlatformFeeCents?: number;
         overageMarginPct?: number;
         safetyOverheadPct?: number;
         reservePct?: number;
@@ -77,6 +79,8 @@ export const queryKeys = {
       from,
       to,
       input?.targetGrossMarginPct,
+      input?.minimumCogsMarkupPct,
+      input?.fixedPlatformFeeCents,
       input?.overageMarginPct,
       input?.safetyOverheadPct,
       input?.reservePct,
