@@ -23,6 +23,7 @@ import { createLocalAgentJwt } from "../agent-auth-jwt.js";
 import { parseObject, asBoolean, asNumber, appendWithCap, MAX_EXCERPT_BYTES } from "../adapters/utils.js";
 import { costService } from "./costs.js";
 import { secretService } from "./secrets.js";
+import { walletService } from "./wallets.js";
 import { resolveDefaultAgentWorkspaceDir } from "../home-paths.js";
 import { summarizeHeartbeatRunResultJson } from "./heartbeat-run-summary.js";
 import {
@@ -627,6 +628,7 @@ function resolveNextSessionState(input: {
 export function heartbeatService(db: Db) {
   const runLogStore = getRunLogStore();
   const secretsSvc = secretService(db);
+  const wallets = walletService(db);
   const issuesSvc = issueService(db);
   const activeRunExecutions = new Set<string>();
 
@@ -1499,6 +1501,33 @@ export function heartbeatService(db: Db) {
       });
       const failedRun = await getRun(runId);
       if (failedRun) await releaseIssueExecutionAndPromote(failedRun);
+      return;
+    }
+
+    const walletGate = await wallets.canStartRun(agent.companyId);
+    if (!walletGate.allowed) {
+      const failureMessage = walletGate.reason ?? "Wallet exhausted";
+      const finishedAt = new Date();
+      await setRunStatus(run.id, "failed", {
+        error: failureMessage,
+        errorCode: "wallet_exhausted",
+        finishedAt,
+      });
+      await setWakeupStatus(run.wakeupRequestId, "failed", {
+        finishedAt,
+        error: failureMessage,
+      });
+      const failedRun = await getRun(run.id);
+      if (failedRun) {
+        await appendRunEvent(failedRun, 1, {
+          eventType: "error",
+          stream: "system",
+          level: "error",
+          message: failureMessage,
+        });
+        await releaseIssueExecutionAndPromote(failedRun);
+      }
+      await finalizeAgentStatus(agent.id, "failed");
       return;
     }
 

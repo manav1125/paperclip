@@ -2,6 +2,7 @@ import { and, desc, eq, gte, inArray, isNotNull, lte, sql, type SQL } from "driz
 import type { Db } from "@paperclipai/db";
 import { activityLog, agents, companies, costEvents, goals, heartbeatRuns, issues, projects } from "@paperclipai/db";
 import { notFound, unprocessable } from "../errors.js";
+import { walletService } from "./wallets.js";
 
 export interface CostDateRange {
   from?: Date;
@@ -68,6 +69,8 @@ function buildCostEventConditions(
 }
 
 export function costService(db: Db) {
+  const wallets = walletService(db);
+
   return {
     createEvent: async (companyId: string, data: Omit<typeof costEvents.$inferInsert, "companyId">) => {
       const agent = await db
@@ -102,6 +105,13 @@ export function costService(db: Db) {
           updatedAt: new Date(),
         })
         .where(eq(companies.id, companyId));
+
+      await wallets.recordCostDebit(companyId, {
+        amountCents: event.costCents,
+        costEventId: event.id,
+        sourceRef: event.agentId,
+        note: `${event.provider}:${event.model}`,
+      });
 
       const updatedAgent = await db
         .select()

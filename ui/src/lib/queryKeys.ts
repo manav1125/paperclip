@@ -61,6 +61,7 @@ export const queryKeys = {
   instance: {
     schedulerHeartbeats: ["instance", "scheduler-heartbeats"] as const,
     usageAnalytics: (from?: string, to?: string) => ["instance", "usage-analytics", from, to] as const,
+    walletOverview: ["instance", "wallet-overview"] as const,
     pricingPlan: (
       from?: string,
       to?: string,

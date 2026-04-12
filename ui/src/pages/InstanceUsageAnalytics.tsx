@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Building2, Cpu, DollarSign, Layers3, ReceiptText, SlidersHorizontal } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { BarChart3, Building2, Cpu, DollarSign, Layers3, ReceiptText, SlidersHorizontal, Wallet2 } from "lucide-react";
 import { adminUsageApi } from "@/api/adminUsage";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { queryKeys } from "@/lib/queryKeys";
@@ -101,9 +101,12 @@ function SectionTable({
 
 export function InstanceUsageAnalytics() {
   const { setBreadcrumbs } = useBreadcrumbs();
+  const queryClient = useQueryClient();
   const [preset, setPreset] = useState<DatePreset>("mtd");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  const [walletTopUpUsdByCompany, setWalletTopUpUsdByCompany] = useState<Record<string, string>>({});
+  const [walletTopUpErrorByCompany, setWalletTopUpErrorByCompany] = useState<Record<string, string>>({});
   const [targetGrossMarginPct, setTargetGrossMarginPct] = useState("55");
   const [minimumCogsMarkupPct, setMinimumCogsMarkupPct] = useState("100");
   const [fixedPlatformFeeUsd, setFixedPlatformFeeUsd] = useState("149");
@@ -174,7 +177,66 @@ export function InstanceUsageAnalytics() {
     queryFn: () => adminUsageApi.pricingPlan(from || undefined, to || undefined, pricingInput),
   });
 
+  const walletOverviewQuery = useQuery({
+    queryKey: queryKeys.instance.walletOverview,
+    queryFn: () => adminUsageApi.walletOverview(),
+  });
+
+  const topUpWalletMutation = useMutation({
+    mutationFn: async (input: { companyId: string; amountCents: number }) => {
+      return adminUsageApi.topUpCompanyWallet(input.companyId, {
+        amountCents: input.amountCents,
+        note: "Manual top-up from instance Usage & Costs",
+      });
+    },
+    onSuccess: async (_data, variables) => {
+      setWalletTopUpErrorByCompany((prev) => ({
+        ...prev,
+        [variables.companyId]: "",
+      }));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.instance.walletOverview }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.instance.usageAnalytics(from || undefined, to || undefined),
+        }),
+      ]);
+    },
+    onError: (error, variables) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Top-up failed. Please verify your access and amount.";
+      setWalletTopUpErrorByCompany((prev) => ({
+        ...prev,
+        [variables.companyId]: message,
+      }));
+    },
+  });
+
   const presetKeys: DatePreset[] = ["mtd", "7d", "30d", "ytd", "all", "custom"];
+
+  function walletTopUpDraft(companyId: string) {
+    return walletTopUpUsdByCompany[companyId] ?? "100";
+  }
+
+  function setWalletTopUpDraft(companyId: string, value: string) {
+    setWalletTopUpUsdByCompany((prev) => ({ ...prev, [companyId]: value }));
+    setWalletTopUpErrorByCompany((prev) => ({ ...prev, [companyId]: "" }));
+  }
+
+  function submitWalletTopUp(companyId: string) {
+    const rawUsd = walletTopUpDraft(companyId);
+    const parsedUsd = Number(rawUsd);
+    if (!Number.isFinite(parsedUsd) || parsedUsd <= 0) {
+      setWalletTopUpErrorByCompany((prev) => ({
+        ...prev,
+        [companyId]: "Enter a valid USD amount greater than 0.",
+      }));
+      return;
+    }
+    const amountCents = Math.round(parsedUsd * 100);
+    topUpWalletMutation.mutate({ companyId, amountCents });
+  }
 
   if (analyticsQuery.isLoading) {
     return <div className="text-sm text-muted-foreground">Loading usage analytics...</div>;
@@ -283,6 +345,120 @@ export function InstanceUsageAnalytics() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Wallet2 className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base">Wallet Enforcement Control</CardTitle>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Hard wallet mode blocks new agent runs when balance is exhausted or below run threshold.
+            Top up wallets here to keep active companies running.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {walletOverviewQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading wallet balances...</p>
+          ) : null}
+
+          {walletOverviewQuery.error ? (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {walletOverviewQuery.error instanceof Error
+                ? walletOverviewQuery.error.message
+                : "Failed to load wallet overview."}
+            </div>
+          ) : null}
+
+          {walletOverviewQuery.data ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="px-3 py-2 font-medium">Organization</th>
+                    <th className="px-3 py-2 font-medium">Wallet balance</th>
+                    <th className="px-3 py-2 font-medium">Hard limit</th>
+                    <th className="px-3 py-2 font-medium">Run threshold</th>
+                    <th className="px-3 py-2 font-medium">Lifetime top-ups</th>
+                    <th className="px-3 py-2 font-medium">Lifetime debits</th>
+                    <th className="px-3 py-2 font-medium">Top-up (USD)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {walletOverviewQuery.data.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-3 py-4 text-sm text-muted-foreground">
+                        No companies available.
+                      </td>
+                    </tr>
+                  ) : (
+                    walletOverviewQuery.data.map((row) => {
+                      const busy =
+                        topUpWalletMutation.isPending &&
+                        topUpWalletMutation.variables?.companyId === row.companyId;
+                      const topUpError = walletTopUpErrorByCompany[row.companyId];
+                      return (
+                        <tr key={row.companyId} className="border-b border-border/60 last:border-b-0">
+                          <td className="px-3 py-3 align-top">
+                            <div className="space-y-1">
+                              <div className="font-medium">{row.companyName}</div>
+                              <div className="text-xs text-muted-foreground">{row.issuePrefix}</div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 align-top">
+                            <div className="font-medium tabular-nums">
+                              {row.balanceCents != null ? formatCents(row.balanceCents) : "—"}
+                            </div>
+                            {row.balanceCents != null && row.lowBalanceThresholdCents != null ? (
+                              <div className="text-xs text-muted-foreground">
+                                Alert below {formatCents(row.lowBalanceThresholdCents)}
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-3 align-top">
+                            <Badge variant={row.hardLimitEnforced ? "default" : "outline"}>
+                              {row.hardLimitEnforced ? "enforced" : "disabled"}
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-3 align-top tabular-nums">
+                            {row.minRunBalanceCents != null ? formatCents(row.minRunBalanceCents) : "—"}
+                          </td>
+                          <td className="px-3 py-3 align-top tabular-nums">
+                            {row.lifetimeCreditsCents != null ? formatCents(row.lifetimeCreditsCents) : "—"}
+                          </td>
+                          <td className="px-3 py-3 align-top tabular-nums">
+                            {row.lifetimeDebitsCents != null ? formatCents(row.lifetimeDebitsCents) : "—"}
+                          </td>
+                          <td className="px-3 py-3 align-top">
+                            <div className="flex min-w-[220px] items-start gap-2">
+                              <Input
+                                value={walletTopUpDraft(row.companyId)}
+                                onChange={(event) => setWalletTopUpDraft(row.companyId, event.target.value)}
+                                className="h-8"
+                                inputMode="decimal"
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => submitWalletTopUp(row.companyId)}
+                                disabled={busy}
+                              >
+                                {busy ? "Adding..." : "Top up"}
+                              </Button>
+                            </div>
+                            {topUpError ? (
+                              <p className="mt-1 text-xs text-destructive">{topUpError}</p>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="space-y-2">

@@ -122,6 +122,53 @@ export interface AdminPricingPlan {
   };
 }
 
+export interface AdminWalletOverviewRow {
+  companyId: string;
+  companyName: string;
+  issuePrefix: string;
+  walletId: string | null;
+  walletMissing: boolean;
+  balanceCents: number | null;
+  currency: string | null;
+  hardLimitEnforced: boolean | null;
+  minRunBalanceCents: number | null;
+  lowBalanceThresholdCents: number | null;
+  lifetimeCreditsCents: number | null;
+  lifetimeDebitsCents: number | null;
+  updatedAt: string | null;
+}
+
+export interface CompanyWallet {
+  id: string;
+  companyId: string;
+  currency: string;
+  balanceCents: number;
+  lifetimeCreditsCents: number;
+  lifetimeDebitsCents: number;
+  hardLimitEnforced: boolean;
+  minRunBalanceCents: number;
+  lowBalanceThresholdCents: number;
+  lastDebitedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompanyWalletLedgerEntry {
+  id: string;
+  companyId: string;
+  walletId: string;
+  entryType: string;
+  source: string;
+  sourceRef: string | null;
+  amountCents: number;
+  balanceAfterCents: number;
+  note: string | null;
+  costEventId: string | null;
+  runId: string | null;
+  metadataJson: Record<string, unknown>;
+  createdAt: string;
+}
+
 function dateParams(from?: string, to?: string): string {
   const params = new URLSearchParams();
   if (from) params.set("from", from);
@@ -196,4 +243,31 @@ export const adminUsageApi = {
     },
   ) =>
     api.get<AdminPricingPlan>(`/admin/usage/pricing-plan${pricingPlanParams(from, to, input)}`),
+  walletOverview: () =>
+    api.get<AdminWalletOverviewRow[]>("/admin/wallets/overview"),
+  companyWallet: (companyId: string) =>
+    api.get<CompanyWallet>(`/companies/${companyId}/wallet`),
+  companyWalletLedger: (companyId: string, limit: number = 50) =>
+    api.get<CompanyWalletLedgerEntry[]>(`/companies/${companyId}/wallet/ledger?limit=${Math.max(1, Math.floor(limit))}`),
+  topUpCompanyWallet: (
+    companyId: string,
+    payload: {
+      amountCents: number;
+      note?: string;
+      metadataJson?: Record<string, unknown>;
+    },
+  ) =>
+    api.post<{ wallet: CompanyWallet; ledgerEntry: CompanyWalletLedgerEntry }>(
+      `/companies/${companyId}/wallet/top-up`,
+      payload,
+    ),
+  updateCompanyWalletPolicy: (
+    companyId: string,
+    payload: {
+      hardLimitEnforced?: boolean;
+      minRunBalanceCents?: number;
+      lowBalanceThresholdCents?: number;
+    },
+  ) =>
+    api.patch<CompanyWallet>(`/companies/${companyId}/wallet/policy`, payload),
 };
