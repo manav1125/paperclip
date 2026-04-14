@@ -64,7 +64,12 @@ async function pruneWorkspaceDirs(workspacesDir, opts) {
   return { deleted: toDelete.size };
 }
 
-async function pruneOldFiles(rootDir, retentionDays) {
+async function pruneOldFiles(rootDir, retentionDays, opts = {}) {
+  const keepBasenames = new Set(
+    Array.isArray(opts.keepBasenames)
+      ? opts.keepBasenames.filter((v) => typeof v === "string")
+      : [],
+  );
   if (!(await pathExists(rootDir))) return { deleted: 0 };
   const cutoffMs = retentionCutoffMs(retentionDays);
   let deleted = 0;
@@ -77,6 +82,7 @@ async function pruneOldFiles(rootDir, retentionDays) {
         await walk(absolute);
         continue;
       }
+      if (keepBasenames.has(entry.name)) continue;
       const stat = await fs.stat(absolute).catch(() => null);
       if (!stat) continue;
       if (stat.mtimeMs < cutoffMs) {
@@ -87,6 +93,18 @@ async function pruneOldFiles(rootDir, retentionDays) {
   }
 
   await walk(rootDir);
+  return { deleted };
+}
+
+async function pruneKnownLargeDirs(baseDir, relativeDirs) {
+  if (!(await pathExists(baseDir))) return { deleted: 0 };
+  let deleted = 0;
+  for (const relDir of relativeDirs) {
+    const absolute = path.resolve(baseDir, relDir);
+    if (!(await pathExists(absolute))) continue;
+    await removeRecursively(absolute);
+    deleted += 1;
+  }
   return { deleted };
 }
 
@@ -113,22 +131,47 @@ async function main() {
     ? path.resolve(String(process.env.RUN_LOG_BASE_PATH))
     : path.resolve(instanceRoot, "data", "run-logs");
   const serverLogPath = path.resolve(instanceRoot, "logs", "server.log");
+  const claudeHome = path.resolve(home, ".claude");
+  const codexHome = path.resolve(home, ".codex");
 
   const workspaceRetentionDays = asInt(process.env.PAPERCLIP_WORKSPACE_RETENTION_DAYS, 3);
   const workspaceMaxDirs = asInt(process.env.PAPERCLIP_WORKSPACE_MAX_DIRS, 200);
   const runLogRetentionDays = asInt(process.env.PAPERCLIP_RUN_LOG_RETENTION_DAYS, 7);
   const maxServerLogMb = asInt(process.env.PAPERCLIP_SERVER_LOG_MAX_MB, 64);
+  const claudeHomeRetentionDays = asInt(process.env.PAPERCLIP_CLAUDE_HOME_RETENTION_DAYS, 2);
+  const codexHomeRetentionDays = asInt(process.env.PAPERCLIP_CODEX_HOME_RETENTION_DAYS, 2);
 
   const workspaceResult = await pruneWorkspaceDirs(workspacesDir, {
     retentionDays: workspaceRetentionDays,
     maxDirs: workspaceMaxDirs,
   });
   const runLogResult = await pruneOldFiles(runLogsDir, runLogRetentionDays);
+  const claudeFilesResult = await pruneOldFiles(claudeHome, claudeHomeRetentionDays, {
+    keepBasenames: ["auth.json", "settings.json"],
+  });
+  const codexFilesResult = await pruneOldFiles(codexHome, codexHomeRetentionDays, {
+    keepBasenames: ["auth.json", "config.json", "settings.json", "memory.md"],
+  });
+  const claudeHeavyDirsResult = await pruneKnownLargeDirs(claudeHome, [
+    "projects",
+    "cache",
+    "statsig",
+    "tmp",
+  ]);
+  const codexHeavyDirsResult = await pruneKnownLargeDirs(codexHome, [
+    "sessions",
+    "logs",
+    "tmp",
+    "history",
+  ]);
   const logTrimmed = await trimServerLog(serverLogPath, maxServerLogMb);
 
   console.log(
     `[paperclip] Startup prune complete: deleted ${workspaceResult.deleted} workspace dir(s), ` +
-      `${runLogResult.deleted} old run-log file(s), server.log trimmed=${logTrimmed}.`,
+      `${runLogResult.deleted} old run-log file(s), ` +
+      `${claudeFilesResult.deleted} old Claude file(s), ${codexFilesResult.deleted} old Codex file(s), ` +
+      `${claudeHeavyDirsResult.deleted} Claude cache dir(s), ${codexHeavyDirsResult.deleted} Codex cache dir(s), ` +
+      `server.log trimmed=${logTrimmed}.`,
   );
 }
 

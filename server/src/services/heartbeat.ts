@@ -1,5 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
@@ -43,6 +45,7 @@ import {
 import { redactCurrentUserText, redactCurrentUserValue } from "../log-redaction.js";
 
 const MAX_LIVE_LOG_CHUNK_BYTES = 8 * 1024;
+const execFileAsync = promisify(execFile);
 const HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT = 1;
 const HEARTBEAT_MAX_CONCURRENT_RUNS_MAX = 10;
 const DEFERRED_WAKE_CONTEXT_KEY = "_paperclipWakeContext";
@@ -67,6 +70,8 @@ const PAPERCLIP_MEMORY_SOFT_LIMIT_MB = Math.max(
   ),
 );
 let lastResourcePressureLogAt = 0;
+let lastStorageRecoveryAt = 0;
+const STORAGE_RECOVERY_COOLDOWN_MS = 30_000;
 const SESSIONED_LOCAL_ADAPTERS = new Set([
   "claude_local",
   "codex_local",
@@ -135,6 +140,47 @@ function isMemoryPressureActive() {
     );
   }
   return true;
+}
+
+function isNoSpaceError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "ENOSPC"
+  );
+}
+
+async function runStorageRecovery(runId: string, targetPath: string) {
+  const now = Date.now();
+  if (now - lastStorageRecoveryAt < STORAGE_RECOVERY_COOLDOWN_MS) return;
+  lastStorageRecoveryAt = now;
+
+  const pruneScriptPath = path.resolve(process.cwd(), "scripts", "prune-paperclip-storage.mjs");
+  await execFileAsync("node", [pruneScriptPath], {
+    cwd: process.cwd(),
+    env: process.env,
+    maxBuffer: 1024 * 1024,
+  });
+  logger.warn(
+    { runId, targetPath, pruneScriptPath },
+    "Recovered from ENOSPC by running storage prune script",
+  );
+}
+
+async function ensureWorkspaceDir(runId: string, targetPath: string) {
+  try {
+    await fs.mkdir(targetPath, { recursive: true });
+  } catch (error) {
+    if (!isNoSpaceError(error)) throw error;
+    await runStorageRecovery(runId, targetPath).catch((recoveryError) => {
+      logger.error(
+        { err: recoveryError, runId, targetPath },
+        "Storage recovery attempt failed after ENOSPC",
+      );
+    });
+    await fs.mkdir(targetPath, { recursive: true });
+  }
 }
 
 async function withAgentStartLock<T>(agentId: string, fn: () => Promise<T>) {
@@ -873,6 +919,7 @@ export function heartbeatService(db: Db) {
   }
 
   async function resolveWorkspaceForRun(
+    runId: string,
     agent: typeof agents.$inferSelect,
     context: Record<string, unknown>,
     previousSessionParams: Record<string, unknown> | null,
@@ -940,7 +987,7 @@ export function heartbeatService(db: Db) {
       }
 
       const fallbackCwd = resolveDefaultAgentWorkspaceDir(agent.id);
-      await fs.mkdir(fallbackCwd, { recursive: true });
+      await ensureWorkspaceDir(runId, fallbackCwd);
       const warnings: string[] = [];
       if (missingProjectCwds.length > 0) {
         const firstMissing = missingProjectCwds[0];
@@ -988,7 +1035,7 @@ export function heartbeatService(db: Db) {
     }
 
     const cwd = resolveDefaultAgentWorkspaceDir(agent.id);
-    await fs.mkdir(cwd, { recursive: true });
+    await ensureWorkspaceDir(runId, cwd);
     const warnings: string[] = [];
     if (sessionCwd) {
       warnings.push(
@@ -1582,6 +1629,7 @@ export function heartbeatService(db: Db) {
       legacyUseProjectWorkspace: issueAssigneeOverrides?.useProjectWorkspace ?? null,
     });
     const resolvedWorkspace = await resolveWorkspaceForRun(
+      run.id,
       agent,
       context,
       previousSessionParams,

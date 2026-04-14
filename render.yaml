@@ -38,6 +38,10 @@ services:
         value: "360"
       - key: PAPERCLIP_CLAUDE_MAX_TURNS_CAP
         value: "80"
+      - key: PAPERCLIP_CLAUDE_HOME_RETENTION_DAYS
+        value: "2"
+      - key: PAPERCLIP_CODEX_HOME_RETENTION_DAYS
+        value: "2"
       - key: PAPERCLIP_STARTUP_PRUNE
         value: "true"
       - key: PAPERCLIP_WORKSPACE_RETENTION_DAYS
