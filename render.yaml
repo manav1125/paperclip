@@ -36,6 +36,16 @@ services:
         value: "1"
       - key: PAPERCLIP_MEMORY_SOFT_LIMIT_MB
         value: "440"
+      - key: PAPERCLIP_STARTUP_PRUNE
+        value: "true"
+      - key: PAPERCLIP_WORKSPACE_RETENTION_DAYS
+        value: "3"
+      - key: PAPERCLIP_WORKSPACE_MAX_DIRS
+        value: "200"
+      - key: PAPERCLIP_RUN_LOG_RETENTION_DAYS
+        value: "7"
+      - key: PAPERCLIP_SERVER_LOG_MAX_MB
+        value: "64"
       - key: PAPERCLIP_PUBLIC_URL
         sync: false
       - key: DATABASE_URL
