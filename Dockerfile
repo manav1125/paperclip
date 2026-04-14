@@ -58,4 +58,4 @@ VOLUME ["/paperclip"]
 EXPOSE 3100
 
 USER node
-CMD ["node", "--import", "./server/node_modules/tsx/dist/loader.mjs", "server/dist/index.js"]
+CMD ["sh", "-lc", "node ./scripts/prune-paperclip-storage.mjs || true; exec node --import ./server/node_modules/tsx/dist/loader.mjs server/dist/index.js"]
