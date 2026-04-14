@@ -21,7 +21,7 @@ services:
       - key: PORT
         value: "10000"
       - key: NODE_OPTIONS
-        value: --max-old-space-size=384
+        value: --max-old-space-size=256
       - key: SERVE_UI
         value: "true"
       - key: PAPERCLIP_HOME
@@ -35,7 +35,9 @@ services:
       - key: HEARTBEAT_GLOBAL_MAX_CONCURRENT_RUNS
         value: "1"
       - key: PAPERCLIP_MEMORY_SOFT_LIMIT_MB
-        value: "440"
+        value: "360"
+      - key: PAPERCLIP_CLAUDE_MAX_TURNS_CAP
+        value: "80"
       - key: PAPERCLIP_STARTUP_PRUNE
         value: "true"
       - key: PAPERCLIP_WORKSPACE_RETENTION_DAYS
