@@ -234,7 +234,11 @@ async function buildClaudeRuntimeConfig(input: ClaudeExecutionInput): Promise<Cl
   }
 
   for (const [key, value] of Object.entries(envConfig)) {
-    if (typeof value === "string") env[key] = value;
+    if (typeof value !== "string") continue;
+    // Never let empty adapter-config values wipe inherited host secrets
+    // (for example ANTHROPIC_API_KEY provided at the Render service level).
+    if (value.trim().length === 0) continue;
+    env[key] = value;
   }
 
   if (!hasExplicitApiKey && authToken) {
