@@ -316,7 +316,9 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   const model = asString(config.model, "");
   const effort = asString(config.effort, "");
   const chrome = asBoolean(config.chrome, false);
-  const maxTurns = asNumber(config.maxTurnsPerRun, 0);
+  const configuredMaxTurns = asNumber(config.maxTurnsPerRun, 0);
+  const maxTurnsHardCap = Math.max(1, Number.parseInt(process.env.PAPERCLIP_CLAUDE_MAX_TURNS_CAP ?? "80", 10) || 80);
+  const maxTurns = configuredMaxTurns > 0 ? Math.min(configuredMaxTurns, maxTurnsHardCap) : 0;
   const dangerouslySkipPermissions = asBoolean(config.dangerouslySkipPermissions, false);
   const instructionsFilePath = asString(config.instructionsFilePath, "").trim();
   const instructionsFileDir = instructionsFilePath ? `${path.dirname(instructionsFilePath)}/` : "";
@@ -325,6 +327,11 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         `Injected agent instructions via --append-system-prompt-file ${instructionsFilePath} (with path directive appended)`,
       ]
     : [];
+  if (configuredMaxTurns > maxTurnsHardCap) {
+    commandNotes.push(
+      `Capped maxTurnsPerRun from ${configuredMaxTurns} to ${maxTurnsHardCap} via PAPERCLIP_CLAUDE_MAX_TURNS_CAP.`,
+    );
+  }
 
   const runtimeConfig = await buildClaudeRuntimeConfig({
     runId,
