@@ -1777,6 +1777,7 @@ export function heartbeatService(db: Db) {
 
     let seq = 1;
     let handle: RunLogHandle | null = null;
+    let runLogStorageDisabled = false;
     let stdoutExcerpt = "";
     let stderrExcerpt = "";
     try {
@@ -1821,20 +1822,54 @@ export function heartbeatService(db: Db) {
         message: "run started",
       });
 
-      handle = await runLogStore.begin({
-        companyId: run.companyId,
-        agentId: run.agentId,
-        runId,
-      });
+      try {
+        handle = await runLogStore.begin({
+          companyId: run.companyId,
+          agentId: run.agentId,
+          runId,
+        });
 
-      await db
-        .update(heartbeatRuns)
-        .set({
-          logStore: handle.store,
-          logRef: handle.logRef,
-          updatedAt: new Date(),
-        })
-        .where(eq(heartbeatRuns.id, runId));
+        await db
+          .update(heartbeatRuns)
+          .set({
+            logStore: handle.store,
+            logRef: handle.logRef,
+            updatedAt: new Date(),
+          })
+          .where(eq(heartbeatRuns.id, runId));
+      } catch (error) {
+        if (!isNoSpaceError(error)) throw error;
+        await runStorageRecovery(runId, "run-log-store.begin").catch((recoveryError) => {
+          logger.error(
+            { err: recoveryError, runId },
+            "Storage recovery failed while initializing run log store",
+          );
+        });
+        try {
+          handle = await runLogStore.begin({
+            companyId: run.companyId,
+            agentId: run.agentId,
+            runId,
+          });
+
+          await db
+            .update(heartbeatRuns)
+            .set({
+              logStore: handle.store,
+              logRef: handle.logRef,
+              updatedAt: new Date(),
+            })
+            .where(eq(heartbeatRuns.id, runId));
+        } catch (retryError) {
+          if (!isNoSpaceError(retryError)) throw retryError;
+          runLogStorageDisabled = true;
+          handle = null;
+          logger.warn(
+            { runId },
+            "Run-log persistence disabled for this run because storage remains full after recovery",
+          );
+        }
+      }
 
       const onLog = async (stream: "stdout" | "stderr", chunk: string) => {
         const sanitizedChunk = redactCurrentUserText(chunk);
@@ -1842,12 +1877,36 @@ export function heartbeatService(db: Db) {
         if (stream === "stderr") stderrExcerpt = appendExcerpt(stderrExcerpt, sanitizedChunk);
         const ts = new Date().toISOString();
 
-        if (handle) {
-          await runLogStore.append(handle, {
-            stream,
-            chunk: sanitizedChunk,
-            ts,
-          });
+        if (handle && !runLogStorageDisabled) {
+          try {
+            await runLogStore.append(handle, {
+              stream,
+              chunk: sanitizedChunk,
+              ts,
+            });
+          } catch (error) {
+            if (!isNoSpaceError(error)) throw error;
+            await runStorageRecovery(runId, "run-log-store.append").catch((recoveryError) => {
+              logger.error(
+                { err: recoveryError, runId },
+                "Storage recovery failed while appending run log",
+              );
+            });
+            try {
+              await runLogStore.append(handle, {
+                stream,
+                chunk: sanitizedChunk,
+                ts,
+              });
+            } catch (retryError) {
+              if (!isNoSpaceError(retryError)) throw retryError;
+              runLogStorageDisabled = true;
+              logger.warn(
+                { runId },
+                "Run-log persistence disabled for this run because append continues to hit ENOSPC",
+              );
+            }
+          }
         }
 
         const payloadChunk =
